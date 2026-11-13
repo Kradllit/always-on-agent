@@ -2,7 +2,7 @@
 // personal reason shown on the badge, and answers follow-up questions (typed in the app or
 // spoken to the badge), with tools to book a table, get tickets or add the visit to a calendar.
 import Anthropic from "@anthropic-ai/sdk";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // Fast enough for a spoken reply; override with JENSEN_MODEL.
@@ -48,7 +48,14 @@ export type Place = {
 export type Shown = { id: string; place: Place; headline: string; why: string; at: number };
 export type Action = { type: "booking" | "tickets" | "calendar"; summary: string; url?: string };
 
-export const profiles = new Map<string, Profile>();
+// Profiles survive a restart: kept in data/profiles.json next to this file (git ignores data/).
+const STORE = join(import.meta.dir, "data", "profiles.json");
+export const profiles = new Map<string, Profile>(
+  existsSync(STORE) ? (JSON.parse(readFileSync(STORE, "utf8")) as Profile[]).map((p) => [p.id, p]) : []);
+export function saveProfiles() {
+  try { mkdirSync(join(import.meta.dir, "data"), { recursive: true }); writeFileSync(STORE, JSON.stringify([...profiles.values()], null, 1)); }
+  catch (e) { console.error("could not save profiles", e); }
+}
 /** Places shown to each person, newest last; follow-up questions are about the newest. */
 export const shown = new Map<string, Shown[]>();
 export const actions: (Action & { profile: string; at: number })[] = [];
@@ -253,5 +260,6 @@ export async function ask(profile: Profile, question: string) {
 export function newProfile(name: string, interests: string[], notes?: string): Profile {
   const p = { id: id(), name: name || "friend", interests, notes };
   profiles.set(p.id, p);
+  saveProfiles();
   return p;
 }

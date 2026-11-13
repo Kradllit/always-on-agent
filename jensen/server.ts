@@ -18,7 +18,7 @@
 //   GET  /log                                what the watcher did
 //   GET  /nearby?lat=..&lon=..&radius_m=400&limit=40   real places from Wikipedia and OpenStreetMap
 //                                            (PLAN-nearby-places.md), in the shape /recommend takes
-import { actions, ask, calendar, MODEL, newProfile, profiles, recommend, shown } from "./brain.ts";
+import { actions, ask, calendar, MODEL, newProfile, profiles, recommend, saveProfiles, shown } from "./brain.ts";
 import { badgeQueue, log, startWatching, whereabouts } from "./always-on.ts";
 import { nearby } from "./nearby.ts";
 
@@ -30,6 +30,7 @@ Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
+    if (url.pathname !== "/health") console.log(new Date().toTimeString().slice(0, 8), req.method, url.pathname);
     if (req.method === "OPTIONS") return new Response(null, { headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type" } });
     try {
       if (url.pathname === "/health") return json({ ok: true, model: MODEL });
@@ -37,6 +38,7 @@ Bun.serve({
         const b = await req.json();
         const p = newProfile(String(b.name || ""), (b.interests || []).map(String), b.notes);
         if (b.prefs) p.prefs = b.prefs;
+        saveProfiles();
         return json(p);
       }
       if (req.method === "POST" && (url.pathname === "/recommend" || url.pathname === "/ask")) {
@@ -49,7 +51,10 @@ Bun.serve({
       }
       if (req.method === "POST" && url.pathname === "/location") {
         const b = await req.json();
-        if (!profiles.has(b.profile_id)) return json({ error: "unknown profile_id" }, 400);
+        if (!profiles.has(b.profile_id)) {
+          console.log(`location for unknown profile ${b.profile_id}`);
+          return json({ error: "unknown profile_id; POST /profile again" }, 400);
+        }
         whereabouts.set(b.profile_id, { lat: Number(b.lat), lon: Number(b.lon), at: Date.now() });
         return json({ ok: true });
       }
@@ -64,6 +69,7 @@ Bun.serve({
         const p = profiles.get(b.profile_id);
         if (!p) return json({ error: "unknown profile_id" }, 400);
         p.signals = [...(p.signals || []), { place: String(b.place), signal: b.signal, at: Date.now() }];
+        saveProfiles();
         return json({ ok: true, signals: p.signals.length });
       }
       if (url.pathname === "/nearby") {
