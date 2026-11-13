@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jensen · places on your badge (prototype)</title>
+<style>
+  :root {
+    --ink: #0f172a; --grey: #64748b; --line: #e2e8f0; --bg: #f1f5f9;
+    --accent: #6366f1; --accent-soft: #eef2ff; --ok: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, system-ui, sans-serif; }
+  header { max-width: 1320px; margin: 0 auto; padding: 28px 28px 6px; }
+  header h1 { font-size: 30px; line-height: 1.2; margin: 0; }
+  header p { font-size: 18px; color: var(--grey); margin: 6px 0 0; }
+  .stage { max-width: 1320px; margin: 0 auto; padding: 18px 28px 40px;
+           display: grid; grid-template-columns: 390px 1fr 400px; gap: 28px; align-items: start; }
+  .label { font-size: 15px; font-weight: 600; color: var(--grey); margin: 0 0 10px; letter-spacing: .02em; }
+
+  /* ── Phone ── */
+  .phone { width: 390px; height: 800px; border-radius: 54px; background: #0b0b0f; padding: 14px;
+           box-shadow: 0 30px 60px -20px rgba(15,23,42,.35); }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 42px; background: #fff; overflow: hidden;
+            display: flex; flex-direction: column; }
+  .status { height: 50px; flex: none; display: flex; align-items: center; justify-content: space-between;
+            padding: 6px 30px 0; font-size: 15px; font-weight: 600; }
+  .island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 120px; height: 34px;
+            border-radius: 20px; background: #000; }
+  .chat-head { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 18px 12px;
+               border-bottom: 1px solid var(--line); }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: #000; position: relative; flex: none; }
+  .avatar::before, .avatar::after { content: ""; position: absolute; top: 14px; width: 8px; height: 12px;
+               border-radius: 3px; background: #fff; }
+  .avatar::before { left: 11px; } .avatar::after { right: 11px; }
+  .chat-head b { font-size: 17px; display: block; line-height: 1.2; }
+  .chat-head span { font-size: 15px; color: var(--ok); }
+  .msgs { flex: 1; overflow-y: auto; padding: 14px 14px 8px; display: flex; flex-direction: column; gap: 8px;
+          scroll-behavior: smooth; }
+  .msg { max-width: 82%; padding: 9px 13px; border-radius: 18px; font-size: 16px; line-height: 1.4;
+         animation: rise .25s ease-out; }
+  .msg.j { background: #f1f5f9; align-self: flex-start; border-bottom-left-radius: 6px; }
+  .msg.me { background: var(--accent); color: #fff; align-self: flex-end; border-bottom-right-radius: 6px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .typing { align-self: flex-start; background: #f1f5f9; border-radius: 18px; padding: 12px 14px; display: flex; gap: 4px; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; animation: blink 1s infinite; }
+  .typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+  .spot { align-self: flex-start; width: 86%; background: #fff; border: 1px solid var(--line); border-radius: 18px;
+          padding: 10px; display: grid; grid-template-columns: 58px 1fr; gap: 10px; align-items: center;
+          cursor: pointer; animation: rise .25s ease-out; }
+  .spot img { width: 58px; height: 58px; border-radius: 50%; object-fit: cover; }
+  .spot b { font-size: 16px; display: block; line-height: 1.25; }
+  .spot span { font-size: 15px; color: var(--grey); }
+  .spot.open { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .why { grid-column: 1 / -1; font-size: 15px; line-height: 1.45; border-top: 1px solid var(--line);
+         padding-top: 8px; display: none; }
+  .spot.open .why { display: block; }
+  .why .more { color: var(--grey); margin-top: 6px; }
+  .composer { flex: none; border-top: 1px solid var(--line); padding: 10px 12px 26px; min-height: 76px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { border: 1.5px solid var(--accent); color: var(--accent); background: #fff; border-radius: 999px;
+          padding: 7px 14px; font-size: 15px; font-weight: 600; cursor: pointer; }
+  .chip.on { background: var(--accent); color: #fff; }
+  .chip.go { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .chip:disabled { opacity: .35; cursor: default; }
+  .row { display: flex; gap: 8px; }
+  .row input { flex: 1; border: 1.5px solid var(--line); border-radius: 999px; padding: 9px 16px; font-size: 16px; outline: none; }
+  .row input:focus { border-color: var(--accent); }
+  .sheet-wrap { position: absolute; inset: 0; background: rgba(15,23,42,.35); display: none; align-items: center; justify-content: center; }
+  .sheet { width: 272px; background: rgba(245,245,247,.97); border-radius: 16px; text-align: center; overflow: hidden; }
+  .sheet .body { padding: 18px 16px 14px; }
+  .sheet b { font-size: 17px; display: block; }
+  .sheet p { font-size: 15px; margin: 6px 0 0; color: #333; }
+  .sheet .mini { height: 120px; margin: 12px 0 0; border-radius: 10px; background:
+          radial-gradient(circle at 52% 55%, var(--accent) 0 7px, rgba(99,102,241,.25) 8px 26px, transparent 27px),
+          repeating-linear-gradient(0deg, #e5e7eb 0 2px, transparent 2px 22px),
+          repeating-linear-gradient(90deg, #e5e7eb 0 2px, transparent 2px 26px), #f8fafc; }
+  .sheet button { display: block; width: 100%; border: 0; border-top: 1px solid #d4d4d8; background: none;
+          padding: 12px; font-size: 17px; color: #0a7aff; cursor: pointer; }
+
+  /* ── Badge ── */
+  .badge-col { display: flex; flex-direction: column; align-items: center; }
+  .badge { width: 470px; height: 470px; border-radius: 50%; padding: 22px; background:
+           radial-gradient(circle at 35% 25%, #3a3a42, #121216 70%); box-shadow: 0 30px 60px -20px rgba(15,23,42,.45),
+           inset 0 2px 3px rgba(255,255,255,.15); position: relative; }
+  .badge::after { content: "BOOT"; position: absolute; right: -40px; top: 200px; font-size: 15px; color: var(--grey); }
+  .display { position: relative; width: 426px; height: 426px; border-radius: 50%; background: #000; overflow: hidden; cursor: pointer; }
+  .eyes { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 70px;
+          transition: transform .35s ease, opacity .25s; }
+  .eye { width: 66px; height: 112px; background: #fff; border-radius: 22px; transition: height .12s, transform .3s; }
+  .eyes.blink .eye { height: 10px; }
+  .eyes.wide .eye { height: 140px; width: 78px; }
+  .caption { position: absolute; left: 0; right: 0; bottom: 64px; text-align: center; color: #fff;
+             font-size: 22px; font-weight: 600; opacity: .9; }
+  .pop { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; transform: scale(.2); opacity: 0;
+         transition: transform .45s cubic-bezier(.2,1.25,.4,1), opacity .25s; }
+  .pop.show { transform: scale(1); opacity: 1; }
+  .pop img { width: 100%; height: 100%; object-fit: cover; }
+  .pop .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,.85) 0, rgba(0,0,0,.25) 42%, transparent 60%); }
+  .pop .name { position: absolute; left: 60px; right: 60px; bottom: 92px; text-align: center; color: #fff;
+               font-size: 30px; font-weight: 700; line-height: 1.12; }
+  .pop .dist { position: absolute; left: 0; right: 0; bottom: 58px; text-align: center; color: rgba(255,255,255,.85); font-size: 19px; }
+  .pop .hint { position: absolute; left: 0; right: 0; top: 34px; text-align: center; }
+  .pop .hint span { background: rgba(0,0,0,.55); color: #fff; font-size: 16px; padding: 5px 12px; border-radius: 999px; }
+  .ring { position: absolute; inset: 6px; border-radius: 50%; pointer-events: none; }
+  .ring circle { fill: none; stroke: rgba(255,255,255,.85); stroke-width: 5; stroke-linecap: round;
+                 transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .read { position: absolute; inset: 0; border-radius: 50%; background: #000; color: #fff; opacity: 0;
+          pointer-events: none; transition: opacity .3s; display: flex; flex-direction: column; align-items: center; padding: 34px 62px 0; }
+  .read.show { opacity: 1; }
+  .read img { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; flex: none; border: 3px solid #fff; }
+  .read b { font-size: 21px; margin-top: 10px; text-align: center; line-height: 1.2; }
+  .read p { font-size: 18px; line-height: 1.38; text-align: center; margin: 8px 0 0; color: #e2e8f0; }
+  .badge-help { margin-top: 18px; font-size: 16px; color: var(--grey); text-align: center; max-width: 470px; }
+  .badge-help b { color: var(--ink); }
+
+  /* ── Walk panel ── */
+  .panel { background: #fff; border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
+  .panel h2 { font-size: 19px; margin: 0 0 4px; }
+  .panel .sub { font-size: 15px; color: var(--grey); margin: 0 0 10px; }
+  #map { width: 100%; height: 470px; display: block; background: #f8fafc; border-radius: 12px; }
+  .controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .btn { border: 1.5px solid var(--ink); background: #fff; color: var(--ink); border-radius: 10px; padding: 8px 14px;
+         font-size: 15px; font-weight: 600; cursor: pointer; }
+  .btn.primary { background: var(--ink); color: #fff; }
+  .btn:disabled { opacity: .35; cursor: default; }
+  .legend { display: flex; gap: 16px; font-size: 15px; color: var(--grey); margin-top: 10px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .profile { margin-top: 12px; font-size: 15px; background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; }
+  .profile b { font-size: 15px; }
+  footer { max-width: 1320px; margin: 0 auto; padding: 0 28px 40px; font-size: 15px; color: var(--grey); }
+  footer details { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+  footer a { color: var(--grey); }
+  footer summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Jensen notices places you'd love, and pops them up on your badge</h1>
+  <p>Prototype of the flow. Jensen interviews you in the app, asks for your location, then watches as you walk. When you pass something that fits you, it shows on the badge as a round picture, and a tap tells you why Jensen picked it for you.</p>
+</header>
+
+<div class="stage">
+  <!-- Phone -->
+  <div>
+    <p class="label">THE APP</p>
+    <div class="phone"><div class="screen">
+      <div class="island"></div>
+      <div class="status"><span id="clock">2:41</span><span>●●● 5G ▮</span></div>
+      <div class="chat-head"><div class="avatar"></div><div><b>Jensen</b><span id="presence">online</span></div></div>
+      <div class="msgs" id="msgs"></div>
+      <div class="composer" id="composer"></div>
+      <div class="sheet-wrap" id="sheet">
+        <div class="sheet">
+          <div class="body">
+            <b>Allow “Jensen” to use your location?</b>
+            <p>Jensen checks what's near you while you walk. It doesn't keep a history of where you've been.</p>
+            <div class="mini"></div>
+          </div>
+          <button data-allow="once">Allow Once</button>
+          <button data-allow="always"><b>Allow While Using App</b></button>
+          <button data-allow="no">Don't Allow</button>
+        </div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- Badge -->
+  <div class="badge-col">
+    <p class="label">THE BADGE</p>
+    <div class="badge">
+      <div class="display" id="display">
+        <div class="eyes" id="eyes"><div class="eye"></div><div class="eye"></div></div>
+        <div class="caption" id="caption">hi!</div>
+        <div class="pop" id="pop">
+          <img id="popImg" alt="">
+          <div class="shade"></div>
+          <div class="hint"><span>tap: why this?</span></div>
+          <div class="name" id="popName"></div>
+          <div class="dist" id="popDist"></div>
+          <svg class="ring" viewBox="0 0 414 414"><circle id="ringC" cx="207" cy="207" r="203"></circle></svg>
+        </div>
+        <div class="read" id="read">
+          <img id="readImg" alt="">
+          <b id="readName"></b>
+          <p id="readWhy"></p>
+        </div>
+      </div>
+    </div>
+    <p class="badge-help"><b>Tap the badge</b> on a picture to read why Jensen picked it, tap again to go back to the eyes. Left alone, a picture goes back to the eyes after 8 seconds. It stays in the app's chat either way.</p>
+  </div>
+
+  <!-- Walk simulator -->
+  <div>
+    <p class="label">THE WALK (SIMULATED)</p>
+    <div class="panel">
+      <h2>A walk from SoMa to Telegraph Hill</h2>
+      <p class="sub">Jensen checks every place within about 130 m of you, and only shows the ones that fit your answers.</p>
+      <svg id="map" viewBox="0 0 368 470"></svg>
+      <div class="legend"><span><i style="background:var(--accent)"></i>fits you</span><span><i style="background:#cbd5e1"></i>doesn't</span><span><i style="background:#16a34a"></i>shown on badge</span></div>
+      <div class="controls">
+        <button class="btn primary" id="walkBtn" disabled>Start walking</button>
+        <button class="btn" id="speedBtn">Speed 1×</button>
+        <button class="btn" id="resetBtn">Start over</button>
+      </div>
+      <div class="profile" id="profile"><b>What Jensen knows about you:</b> nothing yet. Answer in the app first.</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <details>
+    <summary>About this prototype, and photo credits</summary>
+    <p>A clickable sketch for the team to agree on the flow, not the app. The places are real, and the reasons are written in advance from each place's facts. In the real Jensen, Claude would write each reason from your interview and the place's details. Distances are measured along a straight line.</p>
+    <p id="credits"></p>
+  </details>
+</footer>
+
+<script>
+// ── Places: real spots between SoMa and Telegraph Hill. Each reason is keyed by an interview answer.
+const PLACES = [
+  { id: "yerba", name: "Yerba Buena Gardens", img: "img/yerba-buena.jpg", lat: 37.7848, lon: -122.4027, page: "Yerba_Buena_Gardens",
+    tags: ["p_art", "p_views"], line: "Gardens with a waterfall memorial",
+    why: { p_art: "You said public art. Behind the lawn, a 50-foot waterfall hides the Martin Luther King Jr. Memorial, with his words etched in glass. Walk in behind the water.",
+           p_views: "You like a good view. Climb to the upper terrace for SoMa's skyline over the lawn. It's free and open every day." } },
+  { id: "cjm", name: "Contemporary Jewish Museum", img: "img/cjm.jpg", lat: 37.78577, lon: -122.40394, page: "Contemporary_Jewish_Museum",
+    tags: ["a_modern"], line: "Libeskind's blue cube on a 1907 power station",
+    why: { a_modern: "You're into bold modern buildings. Daniel Libeskind crashed a tilted blue steel cube into a 1907 brick power station here. Look at where the old wall and the new box meet." } },
+  { id: "moad", name: "Museum of the African Diaspora", img: "img/moad.jpg", lat: 37.786411, lon: -122.401546, page: "Museum_of_the_African_Diaspora",
+    tags: ["p_art"], line: "A portrait made of thousands of photos",
+    why: { p_art: "You said public art. The three-storey portrait in the window is made of thousands of photographs from across the African diaspora. Step close and every pixel becomes a face." } },
+  { id: "carousel", name: "The 1906 Carousel", img: "img/carousel.jpg", lat: 37.783273, lon: -122.401827, page: "Children%27s_Creativity_Museum",
+    tags: ["p_quirky"], line: "A hand-carved carousel on a SoMa rooftop",
+    why: { p_quirky: "You like quirky finds. A hand-carved carousel from 1906 spins on a rooftop next to Yerba Buena, and grown-ups ride too." } },
+  { id: "sfmoma", name: "SFMOMA", img: "img/sfmoma.jpg", lat: 37.78571806, lon: -122.40105111, page: "San_Francisco_Museum_of_Modern_Art",
+    tags: ["a_modern", "p_art"], line: "Modern art behind a rippled white wall",
+    why: { a_modern: "You like bold modern architecture. Snøhetta's rippling white wing (2016) was shaped to echo the fog and the bay, and it wraps Mario Botta's 1995 building.",
+           p_art: "You picked art. The free ground-floor galleries make a five-minute stop, and Richard Serra's huge steel walk-through sculpture is right there." } },
+  { id: "palace", name: "Palace Hotel", img: "img/palace.jpg", lat: 37.7884, lon: -122.402, page: "Palace_Hotel,_San_Francisco",
+    tags: ["a_gold", "r_classic"], line: "1875 grand hotel and its glass-roofed Garden Court",
+    why: { a_gold: "You picked Gold Rush–era buildings. The Palace opened in 1875, burned in the 1906 fire and reopened in 1909. Peek into the Garden Court under its stained-glass roof.",
+           r_classic: "You like old-school classics. Afternoon tea in the Garden Court, under a ceiling of stained glass, is as classic as San Francisco gets." } },
+  { id: "lotta", name: "Lotta's Fountain", img: "img/lotta.jpg", lat: 37.78805556, lon: -122.40361111, page: "Lotta%27s_Fountain",
+    tags: ["p_history", "a_gold"], line: "Where the city regrouped after 1906",
+    why: { p_history: "You like hidden history. After the 1906 earthquake, people met at this fountain to find each other. The city still gathers here at 5:12 a.m. every April 18.",
+           a_gold: "You picked Gold Rush–era buildings. This cast-iron fountain from 1875 was a gift from Lotta Crabtree, who started out performing for miners." } },
+  { id: "mint", name: "Old San Francisco Mint", img: "img/mint.jpg", lat: 37.78277778, lon: -122.40722222, page: "Old_San_Francisco_Mint",
+    tags: ["a_gold", "p_history"], line: "The Granite Lady, 1874",
+    why: { a_gold: "You picked Gold Rush–era buildings. The Granite Lady (1874) is one of the few downtown buildings that survived the 1906 fire.",
+           p_history: "You like hidden history. In 1906 the Mint's staff fought the fire with hoses from the basement and saved the building, and the gold inside it." } },
+  { id: "park", name: "Salesforce Park", img: "img/transit-park.jpg", lat: 37.7897, lon: -122.3966, page: "Salesforce_Transit_Center",
+    tags: ["p_views", "p_quirky"], line: "A garden on the roof of a bus station",
+    why: { p_views: "You like a good view. Salesforce Park is a 5.4-acre garden on the roof of the bus station, 70 feet up. Ride the free gondola from Mission Street.",
+           p_quirky: "You like quirky finds. There's a full park on top of a bus station here, with a little gondola to get you up." } },
+  { id: "tower", name: "Salesforce Tower", img: "img/sf-tower.jpg", lat: 37.7899, lon: -122.3969, page: "Salesforce_Tower",
+    tags: ["a_modern"], line: "The city's tallest, with an artwork for a crown",
+    why: { a_modern: "You like bold modern buildings. At 1,070 feet it's the tallest building in San Francisco. Come back after dark: the top is a giant LED artwork by Jim Campbell." } },
+  { id: "southpark", name: "South Park", img: "img/south-park.jpg", lat: 37.78138889, lon: -122.39388889, page: "South_Park,_San_Francisco",
+    tags: ["p_history"], line: "1850s square, dot-com cradle",
+    why: { p_history: "You like hidden history. This oval square from the 1850s became the heart of the dot-com boom, and Twitter started in an office right on it." } },
+  { id: "rincon", name: "Rincon Center", img: "img/rincon.jpg", lat: 37.79222222, lon: -122.39277778, page: "Rincon_Center",
+    tags: ["a_deco", "p_art", "p_history", "r_dimsum"], line: "1940 post office with famous murals",
+    why: { a_deco: "You picked 1930s buildings. This was the Rincon Annex post office, finished in 1940 in streamlined Art Deco. The lobby is still intact.",
+           p_art: "You said public art. Inside are Anton Refregier's 27 murals of California history, so blunt about the past that Congress argued about removing them.",
+           p_history: "You like hidden history. The lobby's murals tell California's story, strikes and all, and were nearly painted over in the 1950s.",
+           r_dimsum: "You like dim sum. Yank Sing, inside Rincon Center, has been rolling carts of dumplings since 1958." } },
+  { id: "ferry", name: "Ferry Building", img: "img/ferry.jpg", lat: 37.7955, lon: -122.3937, page: "San_Francisco_Ferry_Building",
+    tags: ["r_market", "r_seafood", "a_gold"], line: "1898 terminal full of local food",
+    why: { r_market: "You like food halls. The 1898 Ferry Building is lined with local food stalls, and the farmers market sets up outside on Tuesdays, Thursdays and Saturdays.",
+           r_seafood: "You like seafood. Hog Island Oyster Co. inside serves local oysters at the bar, with the Bay Bridge out the window.",
+           a_gold: "You picked old buildings. The clock tower dates from 1898 and stood through the 1906 earthquake." } },
+  { id: "vaillancourt", name: "Vaillancourt Fountain", img: "img/vaillancourt.jpg", lat: 37.7954, lon: -122.3953, page: "Vaillancourt_Fountain",
+    tags: ["p_art", "a_modern"], line: "A concrete fountain you can walk into",
+    why: { p_art: "You said public art. This 1971 concrete fountain was built to be walked through, on stepping stones into the middle of it.",
+           a_modern: "You like bold modern design. Love it or hate it, this 1971 Brutalist fountain is one of the boldest pieces of concrete in the city." } },
+  { id: "tadich", name: "Tadich Grill", img: "img/tadich.jpg", lat: 37.7934, lon: -122.3993, page: "Tadich_Grill",
+    tags: ["r_classic", "r_seafood"], line: "California's oldest restaurant, since 1849",
+    why: { r_classic: "You like old-school classics. Tadich Grill opened in 1849, the oldest restaurant in California. Sit at the long counter.",
+           r_seafood: "You like seafood. Tadich's cioppino, a San Francisco fish stew, is the thing to order here." } },
+  { id: "transamerica", name: "Transamerica Pyramid", img: "img/transamerica.jpg", lat: 37.7952, lon: -122.4028, page: "Transamerica_Pyramid",
+    tags: ["a_modern"], line: "1972 pyramid, now the city's postcard",
+    why: { a_modern: "You like bold modern buildings. William Pereira's 1972 pyramid was mocked when it opened and is now the skyline's signature. There's a small redwood grove at its foot." } },
+  { id: "dragon", name: "Dragon Gate, Chinatown", img: "img/dragon-gate.jpg", lat: 37.7907, lon: -122.4056, page: "Dragon_Gate_(San_Francisco)",
+    tags: ["r_dimsum", "p_quirky"], line: "The gate into the oldest Chinatown in North America",
+    why: { r_dimsum: "You like dim sum. Through this gate is the oldest Chinatown in North America, and the bakeries on Grant Avenue sell egg tarts for a couple of dollars.",
+           p_quirky: "You like quirky finds. Walk under the gate and up Grant Avenue for tea shops, herbalists and alleys." } },
+  { id: "citylights", name: "City Lights Bookstore", img: "img/city-lights.jpg", lat: 37.797628, lon: -122.406575, page: "City_Lights_Bookstore",
+    tags: ["p_history", "p_quirky"], line: "The Beat poets' bookshop, since 1953",
+    why: { p_history: "You like hidden history. Lawrence Ferlinghetti opened City Lights in 1953 and went on trial for publishing Allen Ginsberg's “Howl”, and won.",
+           p_quirky: "You like quirky finds. Climb to the poetry room upstairs and read by the window." } },
+  { id: "exploratorium", name: "Exploratorium", img: "img/exploratorium.jpg", lat: 37.8017, lon: -122.3976, page: "Exploratorium",
+    tags: ["p_quirky"], line: "Hands-on science on Pier 15",
+    why: { p_quirky: "You like quirky finds. Hundreds of hands-on science exhibits on Pier 15, and on Thursday nights it's adults only." } },
+  { id: "coit", name: "Coit Tower", img: "img/coit.jpg", lat: 37.8025, lon: -122.40583333, page: "Coit_Tower",
+    tags: ["a_deco", "p_views", "p_art"], line: "1933 tower on Telegraph Hill",
+    why: { a_deco: "You picked 1930s buildings. Coit Tower went up in 1933 on top of Telegraph Hill.",
+           p_views: "You like a good view. The top of Telegraph Hill looks over the bay, from the Golden Gate to the Bay Bridge.",
+           p_art: "You said public art. The lobby is covered in murals painted in 1934 by more than twenty artists." } },
+];
+
+// The interview: three areas, each with a follow-up question.
+const AREAS = [
+  { id: "r", label: "Restaurants", ask: "What kind of food stops do you like?",
+    opts: [["r_classic", "Old-school classics"], ["r_seafood", "Seafood"], ["r_market", "Markets and food halls"], ["r_dimsum", "Dim sum"]] },
+  { id: "a", label: "Architecture", ask: "Which buildings make you stop?",
+    opts: [["a_gold", "Gold Rush and Victorian"], ["a_deco", "Art Deco and 1930s"], ["a_modern", "Bold and modern"]] },
+  { id: "p", label: "Interesting places", ask: "What makes a place interesting to you?",
+    opts: [["p_history", "Hidden history"], ["p_art", "Public art"], ["p_views", "Views and rooftops"], ["p_quirky", "Quirky finds"]] },
+];
+const TAG_LABEL = Object.fromEntries(AREAS.flatMap(a => a.opts));
+
+// The walk: a route through SoMa, the Financial District, the waterfront and North Beach.
+const ROUTE = [[37.7848,-122.4027],[37.7858,-122.4036],[37.7864,-122.4016],[37.7884,-122.4022],[37.7881,-122.4036],
+  [37.7893,-122.3995],[37.7898,-122.3967],[37.7922,-122.3928],[37.7955,-122.3937],[37.7954,-122.3953],
+  [37.7934,-122.3993],[37.7952,-122.4028],[37.7976,-122.4066],[37.8001,-122.4066],[37.8025,-122.4058]];
+const RADIUS = 130;
+
+// ── State
+const S = { name: "", areas: [], tags: [], step: 0, walking: false, speed: 1, pos: 0, seen: new Set(), busy: false };
+const $ = id => document.getElementById(id);
+const msgs = $("msgs"), composer = $("composer");
+
+function haversine(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b[0] - a[0]) * rad, dLon = (b[1] - a[1]) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a[0] * rad) * Math.cos(b[0] * rad) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+const SEG = ROUTE.slice(1).map((p, i) => haversine(ROUTE[i], p));
+const TOTAL = SEG.reduce((a, b) => a + b, 0);
+function pointAt(m) {
+  for (let i = 0; i < SEG.length; i++) {
+    if (m <= SEG[i]) { const t = m / SEG[i], a = ROUTE[i], b = ROUTE[i + 1]; return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]; }
+    m -= SEG[i];
+  }
+  return ROUTE[ROUTE.length - 1];
+}
+
+// ── Chat helpers
+function scroll() { msgs.scrollTop = msgs.scrollHeight; }
+function say(text, who = "j") { const d = document.createElement("div"); d.className = "msg " + who; d.textContent = text; msgs.appendChild(d); scroll(); return d; }
+function jensen(text, delay = 650) {
+  return new Promise(res => {
+    const t = document.createElement("div"); t.className = "typing"; t.innerHTML = "<i></i><i></i><i></i>";
+    msgs.appendChild(t); scroll();
+    setTimeout(() => { t.remove(); say(text); res(); }, delay);
+  });
+}
+function chips(options, { multi = false, done = "Continue" } = {}) {
+  return new Promise(res => {
+    composer.innerHTML = ""; const wrap = document.createElement("div"); wrap.className = "chips";
+    const picked = new Set();
+    let go;
+    options.forEach(([id, label]) => {
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = label;
+      b.onclick = () => {
+        if (!multi) { composer.innerHTML = ""; res([id]); return; }
+        picked.has(id) ? picked.delete(id) : picked.add(id); b.classList.toggle("on"); go.disabled = picked.size === 0;
+      };
+      wrap.appendChild(b);
+    });
+    if (multi) {
+      go = document.createElement("button"); go.className = "chip go"; go.textContent = done; go.disabled = true;
+      go.onclick = () => { composer.innerHTML = ""; res([...picked]); };
+      wrap.appendChild(go);
+    }
+    composer.appendChild(wrap);
+  });
+}
+function textInput(placeholder) {
+  return new Promise(res => {
+    composer.innerHTML = `<div class="row"><input id="nameIn" placeholder="${placeholder}" autocomplete="off"><button class="chip go" id="nameGo">Send</button></div>`;
+    const inp = $("nameIn"), send = () => { const v = inp.value.trim() || "friend"; composer.innerHTML = ""; res(v); };
+    $("nameGo").onclick = send; inp.onkeydown = e => { if (e.key === "Enter") send(); };
+    setTimeout(() => inp.focus(), 50);
+  });
+}
+function askLocation() {
+  return new Promise(res => {
+    $("sheet").style.display = "flex";
+    $("sheet").querySelectorAll("button").forEach(b => b.onclick = () => { $("sheet").style.display = "none"; res(b.dataset.allow); });
+  });
+}
+
+// ── The interview
+async function interview() {
+  await jensen("Hi, I'm Jensen 👋 I'll keep an eye out while you walk, and tap you on the shoulder when something's worth a detour.", 500);
+  await jensen("What should I call you?", 500);
+  badgeSay("hi!");
+  S.name = await textInput("Your name"); say(S.name, "me");
+  await jensen(`Nice to meet you, ${S.name}. What do you love finding in a city? Pick as many as you like.`);
+  const areas = await chips(AREAS.map(a => [a.id, a.label]), { multi: true });
+  S.areas = areas; say(areas.map(id => AREAS.find(a => a.id === id).label).join(", "), "me");
+  for (const id of areas) {
+    const area = AREAS.find(a => a.id === id);
+    await jensen(area.ask);
+    const tags = await chips(area.opts, { multi: true });
+    S.tags.push(...tags); say(tags.map(t => TAG_LABEL[t]).join(", "), "me");
+    renderProfile(); drawMap();
+  }
+  await jensen("Got it. Last thing: can I use your location? I only check what's near you, and I don't keep a history.");
+  const allow = await askLocation();
+  if (allow === "no") {
+    say("Don't allow", "me");
+    await jensen("No problem. Without your location I can't spot things as you pass them, so you can turn it on any time in Settings. For this demo I'll pretend you said yes.");
+  } else say(allow === "once" ? "Allow once" : "Allow while using the app", "me");
+  const fits = PLACES.filter(fitsYou).length;
+  await jensen(`You're in SoMa, San Francisco. Of the ${PLACES.length} places I know around here, ${fits} fit what you like. Put your badge on and start walking, and I'll ping you as you pass them.`);
+  composer.innerHTML = `<div class="chips"><button class="chip go" id="startChat">Start walking</button></div>`;
+  $("startChat").onclick = startWalk;
+  $("walkBtn").disabled = false; badgeSay("let's go");
+}
+function fitsYou(p) { return p.tags.some(t => S.tags.includes(t)); }
+function reasonFor(p) {
+  const tag = p.tags.find(t => S.tags.includes(t));
+  return { tag, text: p.why[tag] };
+}
+function renderProfile() {
+  $("profile").innerHTML = `<b>What Jensen knows about ${S.name}:</b> ${S.tags.map(t => TAG_LABEL[t]).join(" · ") || "nothing yet"}`;
+}
+
+// ── Badge
+let blinkTimer, glanceTimer, popTimer, ringAnim;
+function badgeSay(text) { $("caption").textContent = text; }
+function idleEyes() {
+  clearInterval(blinkTimer); clearInterval(glanceTimer);
+  blinkTimer = setInterval(() => { $("eyes").classList.add("blink"); setTimeout(() => $("eyes").classList.remove("blink"), 140); }, 3200);
+  glanceTimer = setInterval(() => {
+    const x = (Math.random() - .5) * 60, y = (Math.random() - .5) * 30;
+    $("eyes").style.transform = `translate(${x}px, ${y}px)`;
+  }, 2300);
+}
+const badge = { mode: "eyes", place: null };
+function popUp(p) {
+  S.busy = true; badge.place = p; const { text } = reasonFor(p);
+  $("eyes").classList.add("wide"); badgeSay("ooh");
+  setTimeout(() => {
+    $("eyes").classList.remove("wide");
+    $("popImg").src = p.img; $("popName").textContent = p.name;
+    $("popDist").textContent = p.dist < 40 ? "right here" : `${Math.max(1, Math.round(p.dist / 80))} min walk`;
+    $("pop").classList.add("show"); $("caption").style.opacity = 0; $("eyes").style.opacity = 0; badge.mode = "pop";
+    $("readImg").src = p.img; $("readName").textContent = p.name; $("readWhy").textContent = text;
+    startRing(8000);
+  }, 650);
+  addSpot(p, text);
+}
+function startRing(ms) {
+  const c = $("ringC"), len = 2 * Math.PI * 203; c.style.strokeDasharray = len; c.style.strokeDashoffset = 0;
+  const t0 = performance.now(); cancelAnimationFrame(ringAnim);
+  const step = now => {
+    const k = Math.min(1, (now - t0) / ms); c.style.strokeDashoffset = len * k;
+    if (k < 1 && badge.mode === "pop") ringAnim = requestAnimationFrame(step);
+    else if (k >= 1 && badge.mode === "pop") backToEyes();
+  };
+  ringAnim = requestAnimationFrame(step);
+}
+function backToEyes() {
+  $("pop").classList.remove("show"); $("read").classList.remove("show");
+  $("eyes").style.opacity = 1; $("caption").style.opacity = .9; badgeSay(""); badge.mode = "eyes"; S.busy = false;
+}
+$("display").onclick = () => {
+  if (badge.mode === "pop") {
+    badge.mode = "read"; cancelAnimationFrame(ringAnim); $("pop").classList.remove("show"); $("read").classList.add("show");
+    openSpot(badge.place.id);
+  } else if (badge.mode === "read") backToEyes();
+  else { $("eyes").classList.add("blink"); setTimeout(() => $("eyes").classList.remove("blink"), 140); }
+};
+
+// ── The app's record of each spot
+function addSpot(p, text) {
+  const d = document.createElement("div"); d.className = "spot"; d.dataset.id = p.id;
+  d.innerHTML = `<img src="${p.img}" alt=""><div><b>${p.name}</b><span>${p.line} · ${p.dist < 40 ? "right here" : Math.max(1, Math.round(p.dist / 80)) + " min walk"}</span></div>
+    <div class="why"><b>Why Jensen picked this for you</b><br>${text}<div class="more">Because you said: ${p.tags.filter(t => S.tags.includes(t)).map(t => TAG_LABEL[t]).join(", ")}</div></div>`;
+  d.onclick = () => d.classList.toggle("open");
+  const intro = document.createElement("div"); intro.className = "msg j"; intro.textContent = "📍 Spotted something for you:";
+  msgs.appendChild(intro); msgs.appendChild(d); scroll();
+}
+function openSpot(id) { const d = msgs.querySelector(`.spot[data-id="${id}"]`); if (d) { d.classList.add("open"); d.scrollIntoView({ block: "nearest" }); } }
+
+// ── Map
+const W = 368, H = 470, PAD = 22;
+const lats = [...PLACES.map(p => p.lat), ...ROUTE.map(r => r[0])], lons = [...PLACES.map(p => p.lon), ...ROUTE.map(r => r[1])];
+const box = { minLat: Math.min(...lats), maxLat: Math.max(...lats), minLon: Math.min(...lons), maxLon: Math.max(...lons) };
+const kx = Math.cos(37.79 * Math.PI / 180);
+const scale = Math.min((W - 2 * PAD) / ((box.maxLon - box.minLon) * kx), (H - 2 * PAD) / (box.maxLat - box.minLat));
+const offX = (W - (box.maxLon - box.minLon) * kx * scale) / 2, offY = (H - (box.maxLat - box.minLat) * scale) / 2;
+const xy = (lat, lon) => [offX + (lon - box.minLon) * kx * scale, offY + (box.maxLat - lat) * scale];
+const pxPerM = scale / 111320;
+function drawMap() {
+  const me = pointAt(S.pos), [mx, my] = xy(me[0], me[1]);
+  const route = ROUTE.map(r => xy(r[0], r[1]).map(v => v.toFixed(1)).join(",")).join(" ");
+  const walked = [];
+  let m = 0; for (let i = 0; i <= 60; i++) { m = S.pos * i / 60; const p = pointAt(m); walked.push(xy(p[0], p[1]).map(v => v.toFixed(1)).join(",")); }
+  let svg = `<polyline points="${route}" fill="none" stroke="#e2e8f0" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="${walked.join(" ")}" fill="none" stroke="#a5b4fc" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>`;
+  for (const p of PLACES) {
+    const [x, y] = xy(p.lat, p.lon), fit = S.tags.length && fitsYou(p), seen = S.seen.has(p.id);
+    svg += `<circle cx="${x}" cy="${y}" r="${seen ? 8 : 6.5}" fill="${seen ? "#16a34a" : fit ? "#6366f1" : "#cbd5e1"}" stroke="#fff" stroke-width="2"><title>${p.name}</title></circle>`;
+    if (seen) svg += `<text x="${x + 11}" y="${y + 5}" font-size="15" fill="#0f172a" font-family="-apple-system, system-ui">${p.name.split(",")[0]}</text>`;
+  }
+  svg += `<circle cx="${mx}" cy="${my}" r="${RADIUS * pxPerM}" fill="rgba(99,102,241,.10)" stroke="rgba(99,102,241,.4)"/>
+    <circle cx="${mx}" cy="${my}" r="9" fill="#0f172a" stroke="#fff" stroke-width="3"/>`;
+  $("map").innerHTML = svg;
+}
+
+// ── Walking
+let walkTimer;
+function startWalk() {
+  if (S.walking) return; S.walking = true; composer.innerHTML = "";
+  $("presence").textContent = "watching while you walk"; $("walkBtn").textContent = "Pause";
+  say("Start walking", "me"); badgeSay("");
+  walkTimer = setInterval(tick, 100);
+}
+function tick() {
+  if (S.busy) return;
+  S.pos = Math.min(TOTAL, S.pos + 3.2 * S.speed);
+  const me = pointAt(S.pos);
+  const near = PLACES.filter(p => !S.seen.has(p.id) && fitsYou(p))
+    .map(p => ({ ...p, dist: haversine(me, [p.lat, p.lon]) })).filter(p => p.dist <= RADIUS).sort((a, b) => a.dist - b.dist);
+  if (near.length) { S.seen.add(near[0].id); popUp(near[0]); }
+  drawMap();
+  if (S.pos >= TOTAL) {
+    clearInterval(walkTimer); S.walking = false; $("walkBtn").textContent = "Walk done"; $("walkBtn").disabled = true;
+    const n = S.seen.size;
+    setTimeout(() => jensen(`That's Telegraph Hill, end of the walk. I showed you ${n} place${n === 1 ? "" : "s"} today. Tap any of them above to read why I picked it.`), 800);
+    $("presence").textContent = "online";
+  }
+}
+$("walkBtn").onclick = () => {
+  if (!S.walking) return startWalk();
+  clearInterval(walkTimer); S.walking = false; $("walkBtn").textContent = "Keep walking"; $("presence").textContent = "paused";
+};
+$("speedBtn").onclick = () => { S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 4 : 1; $("speedBtn").textContent = `Speed ${S.speed}×`; };
+$("resetBtn").onclick = () => location.reload();
+
+// ── Clock, credits, start
+function clock() { const d = new Date(); $("clock").textContent = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s?[AP]M/i, ""); }
+clock(); setInterval(clock, 30000);
+$("credits").innerHTML = "Photos: Wikimedia Commons, through each place's Wikipedia article: " +
+  PLACES.map(p => `<a href="https://en.wikipedia.org/wiki/${p.page}" target="_blank">${p.name}</a>`).join(", ") + ". Each image's author and licence are on its Commons page.";
+idleEyes(); drawMap(); interview();
+</script>
+</body>
+</html>
