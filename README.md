@@ -83,10 +83,10 @@ Every event is also written to the log, except the ones that come many times a s
 (`TouchMove`, `Tilt`, `Loudness`, `Second`).
 
 The `app.rs` in the repository is a tour of the hardware, there to be replaced: it writes
-what the badge senses under the eyes (a touch, a tap, petting, the button, a shake, the
-microphone's level, text over Bluetooth). A press of BOOT shows the battery and the Wi-Fi
-address, then the tilt for ten seconds; holding BOOT a second records three seconds and
-plays them back.
+what the badge senses under the eyes (a touch, a tap, petting, the button, a shake, a
+turn of the badge, the microphone's level, text over Bluetooth). A press of BOOT shows the
+battery and the Wi-Fi address; holding BOOT a second records three seconds and plays them
+back.
 
 | File | What |
 |---|---|

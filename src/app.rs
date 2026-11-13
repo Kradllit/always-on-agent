@@ -13,10 +13,10 @@
 //!   touch the screen       "touch 233, 120", following the finger
 //!   tap                    "tap"
 //!   stroke (pet)           "petted 3 times"
-//!   press BOOT             "button pressed", then the battery and the Wi-Fi address,
-//!                          then "tilt 12°, -34°" following the badge for ten seconds
+//!   press BOOT             "button pressed", then the battery and the Wi-Fi address
 //!   hold BOOT a second     records three seconds and plays them back
 //!   shake                  "shake!"
+//!   turn the badge         "tilt 12°, -34°" (a real turn; a hand's small movements don't count)
 //!   make a noise           "mic 23% |||||"
 //!   text over Bluetooth    the text
 
@@ -27,15 +27,17 @@ pub struct App {
     /// wait their turn.
     hold_until: u64,
     touching: bool,
-    /// The tilt readout runs until then. A badge in a hand never stops moving, so it is
-    /// shown only when asked for (a press of BOOT), not all the time.
-    tilt_until: u64,
+    /// Which way was down when the tilt was last shown, and when that was. A badge in a
+    /// hand never stops moving, so the tilt is shown only once it has turned this far from
+    /// there; anything less leaves the caption to the microphone.
+    tilt_shown: [f32; 3],
+    tilt_at: u64,
     recording: bool,
 }
 
 impl App {
     pub fn new() -> Self {
-        App { hold_until: 0, touching: false, tilt_until: 0, recording: false }
+        App { hold_until: 0, touching: false, tilt_shown: [0.0, 0.0, 1.0], tilt_at: 0, recording: false }
     }
 
     /// Say something that should stay readable for a moment.
@@ -44,12 +46,22 @@ impl App {
         self.hold_until = badge.now + ms.min(1500);
     }
 
-    fn show_tilt(&self, badge: &mut Badge) {
-        if badge.now < self.hold_until || badge.now >= self.tilt_until || self.touching {
+    /// Shows the tilt when the badge has turned at least `TURN` from where it was last shown.
+    fn show_tilt(&mut self, badge: &mut Badge, pull: [f32; 3]) {
+        const TURN: f32 = 15.0;
+        let strength = (pull[0] * pull[0] + pull[1] * pull[1] + pull[2] * pull[2]).sqrt();
+        if badge.now < self.hold_until || self.touching || strength < 0.5 {
             return;
         }
-        let [x, y, z] = badge.tilt;
-        let (side, front) = (x.atan2(z).to_degrees(), y.atan2(z).to_degrees());
+        let down = [pull[0] / strength, pull[1] / strength, pull[2] / strength];
+        let same: f32 = (0..3).map(|i| down[i] * self.tilt_shown[i]).sum();
+        if same > TURN.to_radians().cos() {
+            return;
+        }
+        self.tilt_shown = down;
+        self.tilt_at = badge.now;
+        // Degrees to the side and to the front; 0, 0 is lying flat, face up.
+        let (side, front) = (down[0].asin().to_degrees(), down[1].asin().to_degrees());
         badge.say_for(&format!("tilt {side:.0}\u{b0}, {front:.0}\u{b0}"), 1500);
     }
 
@@ -84,7 +96,7 @@ impl App {
                 self.announce(badge, "recording 3 s", 3300);
                 self.hold_until = badge.now + 3300;
             }
-            // Pressed: how the badge is doing, then which way it is leaning.
+            // Pressed: how the badge is doing.
             Event::ButtonUp { .. } => {
                 badge.sound.beep(880, 60);
                 let power = match (badge.battery.charging, badge.battery.on_usb) {
@@ -96,7 +108,6 @@ impl App {
                 let text = format!("{}% {} {}", badge.battery.percent, power, net);
                 self.announce(badge, &text, 4000);
                 self.hold_until = badge.now + 4000;
-                self.tilt_until = badge.now + 14_000;
             }
             Event::Heard(recording) => {
                 self.recording = false;
@@ -109,12 +120,12 @@ impl App {
                 badge.face.startle();
                 self.announce(badge, "shake!", 1500);
             }
-            Event::Tilt { .. } => self.show_tilt(badge),
+            Event::Tilt { x, y, z } => self.show_tilt(badge, [x, y, z]),
 
             // The microphone gets the caption when nothing else wants it.
             Event::Loudness(level) => {
-                let tilting = badge.now < self.tilt_until;
-                if free && !tilting && !self.touching && !self.recording && level >= 6 {
+                let turning = badge.now - self.tilt_at < 1000;
+                if free && !turning && !self.touching && !self.recording && level >= 6 {
                     let bar = "|".repeat((level as usize / 4).clamp(1, 16));
                     badge.say_for(&format!("mic {level}% {bar}"), 600);
                 }
@@ -123,8 +134,7 @@ impl App {
             // Text sent over Bluetooth shows on the screen.
             Event::Message(text) => self.announce(badge, &text, 6000),
 
-            // A badge lying still sends no tilt events: keep its readout on the screen.
-            Event::Second => self.show_tilt(badge),
+            Event::Second => {}
         }
     }
 }
