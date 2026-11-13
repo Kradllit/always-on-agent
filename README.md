@@ -73,11 +73,20 @@ pub fn on_event(&mut self, event: Event, badge: &mut Badge) {
 }
 ```
 
-The events: `Start`, `TouchDown { x, y }`, `TouchUp`, `Tap`, `Pet`, `ButtonDown`,
-`ButtonUp { held_ms }`, `Shake`, `Message(text)` (a line sent over Bluetooth), `Heard(recording)`
-and `Second`. On the badge: `say`, `say_for`, `say_and_keep`, `hush`, `face`, `sound` (`beep`,
-`play`, `listen`, `volume`), `battery`, `ip`, `tilt`, `now`.
-Every event is also written to the log.
+The events: `Start`, `TouchDown { x, y }`, `TouchMove { x, y }`, `TouchUp`, `Tap`, `Pet`,
+`ButtonDown`, `ButtonUp { held_ms }`, `Shake`, `Tilt { x, y, z }`, `Message(text)` (a line sent
+over Bluetooth), `Heard(recording)`, `Loudness(percent)` (how loud the room is, five times a
+second, while `sound.meter(true)` is on) and `Second`. On the badge: `say`, `say_for`,
+`say_and_keep`, `hush`, `face`, `sound` (`beep`, `play`, `listen`, `volume`, `meter`),
+`battery`, `ip`, `tilt`, `now`.
+Every event is also written to the log, except the ones that come many times a second
+(`TouchMove`, `Tilt`, `Loudness`, `Second`).
+
+The `app.rs` in the repository is a tour of the hardware, there to be replaced: it writes
+what the badge senses under the eyes (a touch, a tap, petting, the button, a shake, the
+microphone's level, text over Bluetooth). A press of BOOT shows the battery and the Wi-Fi
+address, then the tilt for ten seconds; holding BOOT a second records three seconds and
+plays them back.
 
 | File | What |
 |---|---|
@@ -96,6 +105,7 @@ Every event is also written to the log.
 | `src/wifi.rs` | Joining Wi-Fi |
 | `src/ble.rs` | The Bluetooth service |
 | `src/guard.rs` | The crash guard |
+| `src/usb.rs` | Brings the USB link back when a restart leaves the computer with a dead one |
 | `src/board.rs` | Pins and addresses, and what on the board is still unused |
 
 `AGENTS.md` has the working rules for coding agents (and is worth a read for people too).

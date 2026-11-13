@@ -43,7 +43,7 @@ impl Recording {
 
     /// The loudest moment, 0 (silence) to 100 (as loud as the microphone goes).
     pub fn loudest(&self) -> u32 {
-        self.samples.iter().map(|s| s.unsigned_abs() as u32).max().unwrap_or(0) * 100 / 32768
+        loudest(&self.samples)
     }
 
     /// The recording as a WAV file, e.g. to send to a speech-to-text service.
@@ -86,6 +86,7 @@ enum Request {
     Play(Arc<Vec<i16>>),
     Listen { ms: u32 },
     Volume(u8),
+    Meter(bool),
 }
 
 /// The app's handle on sound. Every call returns at once.
@@ -125,11 +126,18 @@ impl Sound {
     pub fn volume(&self, percent: u8) {
         self.ask(Request::Volume(percent));
     }
+
+    /// Keep the microphone open and report how loud it is, five times a second, as
+    /// `Event::Loudness`. Off, the microphone only runs while recording.
+    pub fn meter(&self, on: bool) {
+        self.ask(Request::Meter(on));
+    }
 }
 
 struct Codecs {
     speaker: esp_codec_dev_handle_t,
     microphone: esp_codec_dev_handle_t,
+    microphone_open: bool,
     volume: u8,
 }
 
@@ -239,7 +247,7 @@ impl Codecs {
             if speaker.is_null() || microphone.is_null() {
                 bail!("the sound devices could not be made");
             }
-            Ok(Codecs { speaker, microphone, volume: 60 })
+            Ok(Codecs { speaker, microphone, microphone_open: false, volume: 60 })
         }
     }
 
@@ -268,7 +276,10 @@ impl Codecs {
         }
     }
 
-    fn listen(&mut self, ms: u32) -> Result<Vec<i16>> {
+    fn open_microphone(&mut self) -> Result<()> {
+        if self.microphone_open {
+            return Ok(());
+        }
         unsafe {
             let mut format: esp_codec_dev_sample_info_t = core::mem::zeroed();
             format.bits_per_sample = 16;
@@ -277,21 +288,41 @@ impl Codecs {
             format.sample_rate = RATE;
             check(esp_codec_dev_open(self.microphone, &mut format), "open the microphone")?;
             let _ = esp_codec_dev_set_in_channel_gain(self.microphone, 1, 30.0);
-            let mut samples = vec![0i16; (RATE as u64 * ms as u64 / 1000) as usize];
-            let mut result = Ok(());
-            for piece in samples.chunks_mut(2400) {
-                result = check(
-                    esp_codec_dev_read(self.microphone, piece.as_mut_ptr() as *mut c_void, (piece.len() * 2) as i32),
-                    "record",
-                );
-                if result.is_err() {
-                    break;
-                }
+        }
+        self.microphone_open = true;
+        Ok(())
+    }
+
+    fn close_microphone(&mut self) {
+        if self.microphone_open {
+            unsafe {
+                let _ = esp_codec_dev_close(self.microphone);
             }
-            let _ = esp_codec_dev_close(self.microphone);
-            result.map(|_| samples)
+            self.microphone_open = false;
         }
     }
+
+    /// Fill `samples` from the microphone. It must be open.
+    fn read(&mut self, samples: &mut [i16]) -> Result<()> {
+        for piece in samples.chunks_mut(2400) {
+            check(
+                unsafe { esp_codec_dev_read(self.microphone, piece.as_mut_ptr() as *mut c_void, (piece.len() * 2) as i32) },
+                "record",
+            )?;
+        }
+        Ok(())
+    }
+
+    fn listen(&mut self, ms: u32) -> Result<Vec<i16>> {
+        self.open_microphone()?;
+        let mut samples = vec![0i16; (RATE as u64 * ms as u64 / 1000) as usize];
+        self.read(&mut samples).map(|_| samples)
+    }
+}
+
+/// The loudest sample, 0 to 100.
+fn loudest(samples: &[i16]) -> u32 {
+    samples.iter().map(|s| s.unsigned_abs() as u32).max().unwrap_or(0) * 100 / 32768
 }
 
 fn check(code: i32, doing: &str) -> Result<()> {
@@ -319,20 +350,47 @@ pub fn start(i2c: &I2c, events: Sender<Event>) -> Result<Sound> {
     let (requests, queue): (Sender<Request>, Receiver<Request>) = mpsc::channel();
     let mut codecs = Codecs::new(i2c.handle())?;
     std::thread::Builder::new().name("sound".into()).stack_size(8192).spawn(move || {
-        for request in queue {
+        let mut metering = false;
+        let mut slice = vec![0i16; RATE as usize / 5]; // a fifth of a second
+        loop {
+            // With the meter on, a request is looked for between two slices of listening;
+            // with it off, the thread sleeps until one comes.
+            let request = if metering {
+                match queue.try_recv() {
+                    Ok(request) => Some(request),
+                    Err(mpsc::TryRecvError::Empty) => None,
+                    Err(mpsc::TryRecvError::Disconnected) => break,
+                }
+            } else {
+                match queue.recv() {
+                    Ok(request) => Some(request),
+                    Err(_) => break,
+                }
+            };
             let result = match request {
-                Request::Tone { hz, ms } => codecs.play(&tone(hz, ms)),
-                Request::Play(samples) => codecs.play(&samples),
-                Request::Volume(percent) => {
+                Some(Request::Tone { hz, ms }) => codecs.play(&tone(hz, ms)),
+                Some(Request::Play(samples)) => codecs.play(&samples),
+                Some(Request::Volume(percent)) => {
                     codecs.volume = percent.min(100);
                     Ok(())
                 }
-                Request::Listen { ms } => codecs.listen(ms.min(30_000)).map(|samples| {
+                Some(Request::Listen { ms }) => codecs.listen(ms.min(30_000)).map(|samples| {
                     let _ = events.send(Event::Heard(Recording { samples: Arc::new(samples) }));
+                }),
+                Some(Request::Meter(on)) => {
+                    metering = on;
+                    Ok(())
+                }
+                None => codecs.open_microphone().and_then(|_| codecs.read(&mut slice)).map(|_| {
+                    let _ = events.send(Event::Loudness(loudest(&slice) as u8));
                 }),
             };
             if let Err(error) = result {
                 ::log::warn!("{error}");
+                metering = false;
+            }
+            if !metering {
+                codecs.close_microphone();
             }
         }
     })?;

@@ -17,6 +17,8 @@ pub enum Event {
     Start,
     /// A finger landed on the screen, at this pixel (0,0 is top left, 466 across).
     TouchDown { x: i32, y: i32 },
+    /// The finger moved to this pixel. Not written to the log (there are many).
+    TouchMove { x: i32, y: i32 },
     /// The finger lifted.
     TouchUp,
     /// A short touch that didn't move. The eyes have already widened.
@@ -30,10 +32,16 @@ pub enum Event {
     ButtonUp { held_ms: u64 },
     /// The badge was shaken: three hard jolts.
     Shake,
+    /// The badge was moved or turned: the pull on each axis now, in g. At rest the three
+    /// together are 1 g, pointing down. Not written to the log.
+    Tilt { x: f32, y: f32, z: f32 },
     /// A line of text written to the badge over Bluetooth that isn't a built-in command.
     Message(String),
     /// A recording asked for with `badge.sound.listen(ms)` is ready.
     Heard(Recording),
+    /// How loud the microphone is right now, 0 to 100, five times a second while
+    /// `badge.sound.meter(true)` is on. Not written to the log.
+    Loudness(u8),
     /// Once a second.
     Second,
 }

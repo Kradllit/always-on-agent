@@ -17,6 +17,7 @@
 //!   button.rs   the BOOT button
 //!   motion.rs   the motion sensor: tilt and shakes
 //!   sound.rs    the speaker and the microphones
+//!   usb.rs      keeping the USB link to a computer alive
 //!   wifi.rs     joining the Wi-Fi built into the firmware
 //!   ble.rs      Bluetooth: a status to read, commands and messages to write
 //!   guard.rs    safe mode after repeated crashes at start
@@ -35,6 +36,7 @@ mod power;
 mod sound;
 mod text;
 mod touch;
+mod usb;
 mod wifi;
 
 use std::sync::mpsc;
@@ -164,7 +166,10 @@ fn main() -> Result<()> {
     let mut tilt = [0.0f32; 3];
     let mut active_at = now_ms();
     let mut second_at = 0u64;
-    let mut finger_was_down = false;
+    let mut finger_was: Option<(i32, i32)> = None;
+    let mut tilt_told = [0.0f32; 3];
+    let mut tilt_told_at = 0u64;
+    let mut usb = usb::Usb::new();
     let mut bright = BRIGHT;
     let mut screen = Screen::Off; // nothing shows until the first frame is on the screen
     let mut shown: Option<eyes::Look> = None;
@@ -177,12 +182,18 @@ fn main() -> Result<()> {
 
         // What happened since the last pass.
         let finger = touch.read(&mut i2c);
-        match (finger, finger_was_down) {
-            (Some((x, y)), false) => happened.push(Event::TouchDown { x, y }),
-            (None, true) => happened.push(Event::TouchUp),
+        match (finger, finger_was) {
+            (Some((x, y)), None) => happened.push(Event::TouchDown { x, y }),
+            (Some((x, y)), Some(was)) if (x - was.0).abs() + (y - was.1).abs() >= 4 => {
+                happened.push(Event::TouchMove { x, y })
+            }
+            (None, Some(_)) => happened.push(Event::TouchUp),
             _ => {}
         }
-        finger_was_down = finger.is_some();
+        // The place last told about, so small jitters add up to a move rather than vanish.
+        if happened.iter().any(|e| matches!(e, Event::TouchDown { .. } | Event::TouchMove { .. })) || finger.is_none() {
+            finger_was = finger;
+        }
         match face.update(now, finger) {
             Some(Gesture::Tap) => happened.push(Event::Tap),
             Some(Gesture::Pet) => happened.push(Event::Pet),
@@ -198,6 +209,13 @@ fn main() -> Result<()> {
             if shaken {
                 happened.push(Event::Shake);
             }
+            // Moved or turned noticeably since the app was last told, at most five times a second.
+            let change: f32 = (0..3).map(|i| (pull[i] - tilt_told[i]) * (pull[i] - tilt_told[i])).sum();
+            if change.sqrt() > 0.12 && now - tilt_told_at >= 200 {
+                tilt_told = pull;
+                tilt_told_at = now;
+                happened.push(Event::Tilt { x: pull[0], y: pull[1], z: pull[2] });
+            }
         }
         for command in commands.try_iter() {
             active_at = now;
@@ -212,7 +230,8 @@ fn main() -> Result<()> {
             }
         }
         happened.extend(inbox.try_iter());
-        if !happened.is_empty() {
+        // Anything but background noise keeps the screen awake.
+        if happened.iter().any(|e| !matches!(e, Event::Loudness(_))) {
             active_at = now;
         }
         if now - second_at >= 1000 {
@@ -235,13 +254,15 @@ fn main() -> Result<()> {
             let mut badge =
                 Badge { face: &mut face, caption: &mut caption, sound: sound.clone(), now, battery, ip, tilt };
             for event in happened.drain(..) {
-                if event != Event::Second {
+                // The ones that come in streams stay out of the log.
+                if !matches!(event, Event::Second | Event::TouchMove { .. } | Event::Tilt { .. } | Event::Loudness(_)) {
                     log::info!("event: {event:?}");
                 }
                 app.on_event(event, &mut badge);
             }
         }
         caption.tick(now);
+        usb.tick(now, battery.on_usb);
 
         // The screen rests when the badge is left alone.
         let idle = now - active_at;
