@@ -5,6 +5,7 @@
 import { createSdkMcpServer, query, tool } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
 import { profiles, shown, type Profile, type Shown } from "./brain.ts";
+import { nearby } from "./nearby.ts";
 
 const MODEL = process.env.JENSEN_AGENT_MODEL || "claude-sonnet-5-5";
 const WATCH_S = Number(process.env.JENSEN_WATCH_S || 20);
@@ -17,22 +18,11 @@ const note = (profile: string, line: string) => { log.push({ at: Date.now(), pro
 
 type Nearby = { name: string; distance_m: number; summary: string; image?: string; url: string; lat: number; lon: number };
 
-/** Real places around a point, with a picture and a short intro, from Wikipedia. */
+/** Real places around a point, from Wikipedia and OpenStreetMap (nearby.ts). */
 async function placesAround(lat: number, lon: number): Promise<Nearby[]> {
-  const q = new URLSearchParams({
-    action: "query", format: "json", generator: "geosearch", ggscoord: `${lat}|${lon}`, ggsradius: String(RADIUS_M),
-    ggslimit: "15", prop: "pageimages|extracts|coordinates|info", inprop: "url", exintro: "1", explaintext: "1",
-    exsentences: "2", exlimit: "15", pithumbsize: "600",
-  });
-  const r = await fetch(`https://en.wikipedia.org/w/api.php?${q}`, { headers: { "user-agent": "jensen-hackathon/0.1" } });
-  const pages = Object.values(((await r.json()) as any).query?.pages || {}) as any[];
-  const rad = Math.PI / 180;
-  return pages.map((p) => {
-    const c = p.coordinates?.[0] || { lat, lon };
-    const d = 2 * 6371000 * Math.asin(Math.sqrt(Math.sin(((c.lat - lat) * rad) / 2) ** 2 +
-      Math.cos(lat * rad) * Math.cos(c.lat * rad) * Math.sin(((c.lon - lon) * rad) / 2) ** 2));
-    return { name: p.title, distance_m: Math.round(d), summary: p.extract || "", image: p.thumbnail?.source, url: p.fullurl, lat: c.lat, lon: c.lon };
-  }).sort((a, b) => a.distance_m - b.distance_m);
+  const { places } = await nearby(lat, lon, RADIUS_M, 15);
+  return places.map((p) => ({ name: p.name, distance_m: p.distance_m ?? 0, summary: [p.category, p.summary].filter(Boolean).join(": "),
+    image: p.image, url: p.url || "", lat: p.lat!, lon: p.lon! }));
 }
 
 function toolsFor(profile: Profile, found: Nearby[]) {
