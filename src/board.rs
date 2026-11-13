@@ -3,15 +3,13 @@
 //! One I2C bus carries the power chip, the touch controller, the motion sensor and the
 //! audio chips. The screen has its own SPI bus with four data lines.
 
-/// I2C bus 0, 400 kHz.
-pub const I2C_SDA: i32 = 15;
-pub const I2C_SCL: i32 = 14;
+// I2C bus 0, 400 kHz: SDA is GPIO 15, SCL is GPIO 14 (main.rs hands those pins over).
 
 /// AXP2101 power chip: battery, charging, the power rails, the PWR button.
 pub const PMIC_ADDR: u8 = 0x34;
 /// CST9217 touch controller.
 pub const TOUCH_ADDR: u8 = 0x5A;
-pub const TOUCH_RESET: i32 = 2;
+// Its reset line is GPIO 2 (main.rs hands that pin over).
 /// Low while a finger is on the screen.
 #[allow(dead_code)]
 pub const TOUCH_INT: i32 = 11;

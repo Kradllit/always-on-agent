@@ -20,7 +20,7 @@ const PASSWORD: Option<&str> = option_env!("BADGE_WIFI_PASSWORD");
 
 /// Start Wi-Fi on a thread of its own. Returns at once; `status.ip` says when it is online.
 pub fn start(
-    modem: Modem,
+    modem: Modem<'static>,
     events: EspSystemEventLoop,
     nvs: EspDefaultNvsPartition,
     status: Arc<Mutex<Status>>,
@@ -39,7 +39,7 @@ pub fn start(
 }
 
 fn run(
-    modem: Modem,
+    modem: Modem<'static>,
     events: EspSystemEventLoop,
     nvs: EspDefaultNvsPartition,
     ssid: &str,
@@ -67,6 +67,22 @@ fn run(
                 Err(error) => {
                     log::warn!("Wi-Fi: could not join {ssid}: {error}");
                     let _ = wifi.disconnect();
+                    // Say why, as far as a look around can tell.
+                    match wifi.scan() {
+                        Ok(found) => match found.iter().filter(|ap| ap.ssid.as_str() == ssid).max_by_key(|ap| ap.signal_strength) {
+                            Some(ap) => log::warn!(
+                                "Wi-Fi: {ssid} is in range (channel {}, signal {} dBm, security {:?}): \
+                                 the password may be wrong, or the network turns this badge away",
+                                ap.channel, ap.signal_strength, ap.auth_method
+                            ),
+                            None => log::warn!(
+                                "Wi-Fi: {ssid} was not found on 2.4 GHz ({} other networks were). \
+                                 The badge can't use 5 GHz.",
+                                found.len()
+                            ),
+                        },
+                        Err(error) => log::warn!("Wi-Fi: could not look for networks: {error}"),
+                    }
                 }
             }
         }

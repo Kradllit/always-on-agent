@@ -8,11 +8,11 @@ use esp_idf_svc::hal::i2c::I2cDriver;
 use crate::board::{SCREEN, TOUCH_ADDR};
 
 pub struct Touch {
-    reset: PinDriver<'static, AnyOutputPin, Output>,
+    reset: PinDriver<'static, Output>,
 }
 
 impl Touch {
-    pub fn new(reset: AnyOutputPin) -> Result<Self> {
+    pub fn new(reset: AnyOutputPin<'static>) -> Result<Self> {
         let mut touch = Touch { reset: PinDriver::output(reset)? };
         touch.restart()?;
         Ok(touch)

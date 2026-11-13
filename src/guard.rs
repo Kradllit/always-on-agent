@@ -7,7 +7,10 @@
 
 use anyhow::Result;
 use esp_idf_svc::nvs::{EspDefaultNvsPartition, EspNvs, NvsDefault};
-use esp_idf_svc::sys::*;
+use esp_idf_svc::sys::{
+    esp_reset_reason, esp_reset_reason_t_ESP_RST_INT_WDT, esp_reset_reason_t_ESP_RST_PANIC,
+    esp_reset_reason_t_ESP_RST_TASK_WDT, esp_reset_reason_t_ESP_RST_WDT,
+};
 
 const LIMIT: u8 = 3;
 /// Up this long, a start counts as a good one.

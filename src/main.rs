@@ -27,7 +27,6 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::FreeRtos;
-use esp_idf_svc::hal::gpio::OutputPin;
 use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
 use esp_idf_svc::hal::units::FromValueType;
@@ -124,7 +123,7 @@ fn main() -> Result<()> {
     }
 
     let mut display = Display::new()?;
-    let mut touch = touch::Touch::new(pins.gpio2.downgrade_output())?;
+    let mut touch = touch::Touch::new(pins.gpio2.degrade_output())?;
     let mut face = Face::new();
 
     let status = Arc::new(Mutex::new(Status::default()));
