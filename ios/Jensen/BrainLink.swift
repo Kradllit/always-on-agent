@@ -40,7 +40,11 @@ struct Answer: Decodable {
 /// Who is walking, as the brain is told (POST /profile).
 struct Walker: Equatable {
     var interests: [String]
-    var prefs: [String: String]
+    /// Wander's onboarding: "leisurely", "normal" or "brisk"; minutes available; how picky
+    /// Jensen is before tapping (0.6 only the best, 0.5 balanced, 0.38 tell me lots).
+    var pace: String
+    var minutes: Int
+    var chat: Double
     var notes: String?
 }
 
@@ -102,7 +106,7 @@ final class BrainLink: ObservableObject {
 
     private func makeProfile() async throws -> String {
         guard let base, let walker else { throw URLError(.badURL) }
-        var body: [String: Any] = ["name": "A walker", "interests": walker.interests, "prefs": walker.prefs]
+        var body: [String: Any] = ["name": "A walker", "interests": walker.interests, "prefs": ["pace": walker.pace, "time_min": walker.minutes, "chat": walker.chat] as [String: Any]]
         if let notes = walker.notes { body["notes"] = notes }
         let made = try await send(base, "profile", body, timeout: 10)
         guard let id = made["id"] as? String else { throw URLError(.cannotParseResponse) }

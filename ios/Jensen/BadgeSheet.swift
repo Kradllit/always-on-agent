@@ -11,7 +11,8 @@ struct BadgeSheet: View {
             List {
                 if badge.paired != nil {
                     pairedSection
-                } else {
+                }
+                if badge.paired == nil || badge.phase != .ready {
                     scanSection
                 }
             }
@@ -23,7 +24,7 @@ struct BadgeSheet: View {
                 }
             }
         }
-        .onAppear { if badge.paired == nil { badge.startScan() } }
+        .onAppear { if badge.phase != .ready { badge.startScan() } }
         .onDisappear { badge.stopScan() }
         .onChange(of: badge.paired) { if badge.paired == nil { badge.startScan() } }
     }
@@ -73,14 +74,18 @@ struct BadgeSheet: View {
                         Text(found.nearness).font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Button("Pair") { badge.pair(found.id) }
-                        .buttonStyle(.borderedProminent)
+                    if found.id == badge.paired {
+                        Text("Paired").foregroundStyle(.secondary)
+                    } else {
+                        Button("Pair") { badge.pair(found.id) }
+                            .buttonStyle(.borderedProminent)
+                    }
                 }
             }
         } header: {
             Text("Badges nearby")
         } footer: {
-            Text("Turn the badge on and hold it near the iPhone. Every badge is called Basecamp Badge: the nearest is at the top, and the one you pair says \"Paired with Jensen\". If none shows up, another phone may be connected to it.")
+            Text("Turn the badge on and hold it near the iPhone. Badges are listed by the name they advertise: the nearest is at the top, and the one you pair says \"Paired with Jensen\". If none shows up, another phone may be connected to it.")
         }
     }
 

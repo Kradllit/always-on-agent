@@ -15,6 +15,10 @@ struct ChatView: View {
 
     var body: some View {
         NavigationStack {
+            Group {
+            if jensen.onboarding {
+                OnboardingView()
+            } else {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 10) {
@@ -39,6 +43,8 @@ struct ChatView: View {
                     withAnimation(.smooth) { proxy.scrollTo(last.id, anchor: .bottom) }
                 }
             }
+            }
+            }
             .safeAreaInset(edge: .top) {
                 Text(badge.statusLine)
                     .font(.system(size: 10, design: .monospaced))
@@ -49,7 +55,7 @@ struct ChatView: View {
                     .background(.bar)
                     .onTapGesture { showingBadge = true }
             }
-            .safeAreaInset(edge: .bottom) { composer }
+            .safeAreaInset(edge: .bottom) { if !jensen.onboarding { composer } }
             .overlay {
                 if let place = jensen.pop {
                     PopUp(place: place) { jensen.popDone() }

@@ -52,6 +52,19 @@ enum Pace: String, Codable, CaseIterable {
 private struct Profile: Codable {
     var interests: [Interest] = []
     var pace: Pace = .lots
+    /// From the onboarding screen (Wander's): walking pace, minutes available, how chatty.
+    var walk: String?
+    var minutes: Int?
+    var chat: Double?
+}
+
+/// The onboarding screen's choices, as in wander/index.html.
+enum Onboarding {
+    static let interests = ["🍜 Food", "☕ Coffee", "🏛 Architecture", "🖼 Museums and art", "🌳 Parks", "📜 History",
+                            "📚 Books", "🌇 Views", "🍸 Bars", "🧪 Science", "🛍 Shopping", "🕵️ Hidden gems"]
+    static let paces = [("leisurely", "Leisurely"), ("normal", "Normal"), ("brisk", "Brisk")]
+    static let times = [(120, "2 hrs"), (240, "Afternoon"), (420, "Through dinner")]
+    static let chats = [(0.6, "Only the best"), (0.5, "Balanced"), (0.38, "Tell me lots")]
 }
 
 /// Jensen: runs the interview in the chat, then keeps looking for places around the phone
@@ -110,7 +123,27 @@ final class Jensen: ObservableObject {
                 say("Welcome back. I still need your location to look for \(Self.list(profile.interests)) around you.")
             }
         } else {
-            greet()
+            stage = .interests  // the onboarding screen
+        }
+    }
+
+    /// Whether the onboarding screen is up.
+    var onboarding: Bool { stage == .interests && profile.interests.isEmpty }
+
+    /// The onboarding screen's Start: remember the answers, then ask for the location.
+    func begin(interests: [String], walk: String, minutes: Int, chat: Double) {
+        profile.interests = interests.map { Interest(words: $0.drop(while: { !$0.isLetter }).trimmingCharacters(in: .whitespaces)) }
+        profile.walk = walk
+        profile.minutes = minutes
+        profile.chat = chat
+        profile.pace = chat >= 0.6 ? .few : .lots
+        save()
+        stage = .location
+        say("Hi, I'm Jensen. I'll look for \(Self.list(profile.interests)) while you walk, and tap you on the badge when something fits.")
+        if finder.allowed {
+            explore(announce: true)
+        } else {
+            say("To look around you I need to know where you are. Tap Share my location, or start the Demo walk.")
         }
     }
 
@@ -202,7 +235,6 @@ final class Jensen: ObservableObject {
         paused = false
         messages = []
         stage = .interests
-        greet()
     }
 
     // MARK: The interview
@@ -389,7 +421,9 @@ final class Jensen: ObservableObject {
 
     /// Tell the brain who is walking (POST /profile).
     private func introduce() {
-        brain.introduce(Walker(interests: profile.interests.map(\.words), prefs: ["pace": profile.pace.rawValue], notes: nil))
+        let minutes = profile.minutes ?? 240
+        brain.introduce(Walker(interests: profile.interests.map(\.words), pace: profile.walk ?? "normal", minutes: minutes,
+                               chat: profile.chat ?? 0.5, notes: "Has about \(minutes / 60) hours today."))
     }
 
     // MARK: Small things

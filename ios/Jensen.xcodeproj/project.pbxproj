@@ -10,6 +10,7 @@
 		0E9692DCA0CA21AF08C394CB /* BadgeLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E87DD59ADE71DDC49EEF667 /* BadgeLink.swift */; };
 		1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */; };
 		455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */; };
+		528AE6DD5ADCA92D38994A18 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637FBDFBFE1472367B5BC376 /* OnboardingView.swift */; };
 		923762206CF563F3A53B6BB9 /* BrainLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6711D5F7804E4480189E8223 /* BrainLink.swift */; };
 		A3EE3AC74D35641AF89738AC /* PopUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD024B2C5CAC2033674551D /* PopUp.swift */; };
 		B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0826B68C932F41586A40C2 /* PlaceFinder.swift */; };
@@ -22,6 +23,7 @@
 		08ADC0654F12340E67AEC37E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JensenApp.swift; sourceTree = "<group>"; };
 		4B04958114F1CBFCEAADB93C /* BadgeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeSheet.swift; sourceTree = "<group>"; };
+		637FBDFBFE1472367B5BC376 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		6711D5F7804E4480189E8223 /* BrainLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainLink.swift; sourceTree = "<group>"; };
 		8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Jensen.swift; sourceTree = "<group>"; };
 		9E0826B68C932F41586A40C2 /* PlaceFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceFinder.swift; sourceTree = "<group>"; };
@@ -60,6 +62,7 @@
 				08ADC0654F12340E67AEC37E /* Info.plist */,
 				8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */,
 				401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */,
+				637FBDFBFE1472367B5BC376 /* OnboardingView.swift */,
 				9E0826B68C932F41586A40C2 /* PlaceFinder.swift */,
 				ADD024B2C5CAC2033674551D /* PopUp.swift */,
 			);
@@ -131,6 +134,7 @@
 				E58BEC5FE24785BCAC83DCB8 /* DemoWalk.swift in Sources */,
 				455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */,
 				1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */,
+				528AE6DD5ADCA92D38994A18 /* OnboardingView.swift in Sources */,
 				B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */,
 				A3EE3AC74D35641AF89738AC /* PopUp.swift in Sources */,
 			);
