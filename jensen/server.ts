@@ -16,8 +16,11 @@
 //   POST /feedback   {profile_id, place, signal}  went_in | saved | not_my_thing | not_now | been_there | lingered
 //                                            (Wander's learning loop: later picks lean towards what they went into)
 //   GET  /log                                what the watcher did
+//   GET  /nearby?lat=..&lon=..&radius_m=400&limit=40   real places from Wikipedia and OpenStreetMap
+//                                            (PLAN-nearby-places.md), in the shape /recommend takes
 import { actions, ask, calendar, MODEL, newProfile, profiles, recommend, shown } from "./brain.ts";
 import { badgeQueue, log, startWatching, whereabouts } from "./always-on.ts";
+import { nearby } from "./nearby.ts";
 
 const PORT = Number(process.env.PORT || 8787);
 const json = (data: unknown, status = 200) =>
@@ -62,6 +65,11 @@ Bun.serve({
         if (!p) return json({ error: "unknown profile_id" }, 400);
         p.signals = [...(p.signals || []), { place: String(b.place), signal: b.signal, at: Date.now() }];
         return json({ ok: true, signals: p.signals.length });
+      }
+      if (url.pathname === "/nearby") {
+        const lat = Number(url.searchParams.get("lat")), lon = Number(url.searchParams.get("lon"));
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return json({ error: "lat and lon are required" }, 400);
+        return json(await nearby(lat, lon, Number(url.searchParams.get("radius_m") || 400), Number(url.searchParams.get("limit") || 40)));
       }
       if (url.pathname === "/log") return json(log.slice(-50));
       const ics = url.pathname.match(/^\/calendar\/(\w+)\.ics$/);
