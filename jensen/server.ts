@@ -23,6 +23,7 @@ import { badgeQueue, log, startWatching, whereabouts } from "./always-on.ts";
 import { nearby } from "./nearby.ts";
 
 const PORT = Number(process.env.PORT || 8787);
+const cursors = new Map<string, number>();
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "access-control-allow-origin": "*" } });
 
@@ -59,8 +60,14 @@ Bun.serve({
         return json({ ok: true });
       }
       if (url.pathname === "/badge/next") {
-        const q = badgeQueue.get(url.searchParams.get("profile_id") || "") || [];
-        const next = q.shift();
+        // Every reader (the phone, the laptop's Bluetooth bridge, a web page) gets every pick once:
+        // one cursor per reader, told apart by ?consumer= or else by its User-Agent.
+        const pid = url.searchParams.get("profile_id") || "";
+        const reader = `${pid}|${url.searchParams.get("consumer") || req.headers.get("user-agent") || "?"}`;
+        const all = shown.get(pid) || [];
+        const at = cursors.get(reader) ?? 0;
+        const next = all[at];
+        if (next) cursors.set(reader, at + 1);
         return json(next ? { empty: false, ...next } : { empty: true });
       }
       if (req.method === "POST" && url.pathname === "/feedback") {
