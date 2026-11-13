@@ -58,6 +58,22 @@ async function openStreetMap(lat: number, lon: number, radius: number): Promise<
   }).filter((p: NearbyPlace) => p.name && p.lat != null);
 }
 
+/** A photo taken near a point, from Wikimedia Commons, for places whose article has none (and all OSM places). */
+const photoCache = new Map<string, string | null>();
+async function photoNear(lat: number, lon: number): Promise<string | undefined> {
+  const key = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  if (photoCache.has(key)) return photoCache.get(key) ?? undefined;
+  try {
+    const q = new URLSearchParams({ action: "query", format: "json", generator: "geosearch", ggsnamespace: "6",
+      ggscoord: `${lat}|${lon}`, ggsradius: "60", ggslimit: "3", prop: "imageinfo", iiprop: "url|mime", iiurlwidth: "600" });
+    const r = await timed(`https://commons.wikimedia.org/w/api.php?${q}`);
+    const pages = Object.values(((await r.json()) as any).query?.pages || {}) as any[];
+    const jpg = pages.map((p) => p.imageinfo?.[0]).find((i) => i && /jpe?g|png/.test(i.mime || ""));
+    photoCache.set(key, jpg?.thumburl ?? null);
+    return jpg?.thumburl;
+  } catch { return undefined; }
+}
+
 /** One entry per real place: an OSM place that links to, or sits within 60 m of a same-named, Wikipedia article. */
 export function merge(wiki: NearbyPlace[], osm: NearbyPlace[]): NearbyPlace[] {
   const out: NearbyPlace[] = [...wiki.map((w) => ({ ...w }))];
@@ -92,5 +108,7 @@ export async function nearby(lat: number, lon: number, radiusM = 400, limit = 40
     .filter((p) => p.distance_m <= radius)
     .sort((a, b) => a.distance_m - b.distance_m)
     .slice(0, limit);
+  // Every place should come with a picture: fill the gaps from Commons photos taken on the spot.
+  await Promise.all(places.filter((p) => !p.image).map(async (p) => { const img = await photoNear(p.lat!, p.lon!); if (img) { p.image = img; (p as any).image_source = "commons-nearby"; } }));
   return { places, sources: hit.sources, ms: Math.round(performance.now() - t0) };
 }
