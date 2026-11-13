@@ -3,7 +3,8 @@
 A starting firmware in Rust for a small round touchscreen badge, the Waveshare
 ESP32-S3-Touch-AMOLED-1.75C.
 It is a base to build on: two eyes, a touchscreen that reacts, text, a button, a shake
-sensor, a battery, Wi-Fi and Bluetooth, with one file (`src/app.rs`) where features go.
+sensor, a speaker and microphones, a battery, Wi-Fi and Bluetooth, with one file
+(`src/app.rs`) where features go.
 
 What it does today:
 
@@ -13,6 +14,8 @@ What it does today:
 - **Text.** A caption of one or two lines under the eyes: `badge.say("hello")`.
 - **Button and shake.** BOOT shows the battery and the Wi-Fi address; shaking the badge
   startles it.
+- **Sound.** A beep on BOOT. Hold BOOT for a second and let go: the badge records three
+  seconds and plays them back.
 - **Battery.** The power chip is set up for charging; the level and charging state are read
   every five seconds. Below 15 % on battery the eyes droop. Untouched, the screen dims after
   30 seconds and, on battery, switches off after two minutes. A touch brings it back.
@@ -33,7 +36,7 @@ What it does today:
 | Touch | CST9217 | I2C, address 0x5A |
 | Power | AXP2101: battery charging, power rails, PWR button | I2C, address 0x34 |
 | Motion | QMI8658 accelerometer and gyroscope (the accelerometer is in use) | I2C, address 0x6B |
-| Sound | ES8311 speaker codec, ES7210 two microphones, a small speaker (not used yet) | I2C and I2S |
+| Sound | ES8311 speaker codec, ES7210 two microphones, a small speaker | I2C and I2S |
 | Buttons | BOOT (GPIO 0), PWR (through the power chip) | |
 | USB-C | Power, flashing and the log, all on the chip's own USB | |
 
@@ -49,8 +52,8 @@ How the Rust sits on the chip: this is Rust with the standard library on top of 
 Espressif's SDK, through the [esp-idf-svc](https://github.com/esp-rs/esp-idf-svc) crates.
 Wi-Fi, storage and threads come from there; Bluetooth from
 [esp32-nimble](https://github.com/taks/esp32-nimble). The one piece of C in use is
-Espressif's driver for the screen's chip. The power chip, the touch controller and the
-face are plain Rust in `src/`.
+Espressif's drivers for the screen's chip and for the two audio chips. The power chip, the
+touch controller, the motion sensor and the face are plain Rust in `src/`.
 
 ## The code
 
@@ -71,8 +74,9 @@ pub fn on_event(&mut self, event: Event, badge: &mut Badge) {
 ```
 
 The events: `Start`, `TouchDown { x, y }`, `TouchUp`, `Tap`, `Pet`, `ButtonDown`,
-`ButtonUp { held_ms }`, `Shake`, `Message(text)` (a line sent over Bluetooth) and `Second`.
-On the badge: `say`, `say_for`, `say_and_keep`, `hush`, `face`, `battery`, `ip`, `tilt`, `now`.
+`ButtonUp { held_ms }`, `Shake`, `Message(text)` (a line sent over Bluetooth), `Heard(recording)`
+and `Second`. On the badge: `say`, `say_for`, `say_and_keep`, `hush`, `face`, `sound` (`beep`,
+`play`, `listen`, `volume`), `battery`, `ip`, `tilt`, `now`.
 Every event is also written to the log.
 
 | File | What |
@@ -84,6 +88,8 @@ Every event is also written to the log.
 | `src/text.rs` | The caption under the eyes |
 | `src/button.rs` | The BOOT button |
 | `src/motion.rs` | The motion sensor: tilt and shakes |
+| `src/sound.rs` | The speaker and the microphones: beep, play, record |
+| `src/bus.rs` | The I2C bus the chips share |
 | `src/display.rs` | The screen: paint a rectangle, set the brightness |
 | `src/touch.rs` | Where the finger is |
 | `src/power.rs` | Battery level, charging, power off |
@@ -91,6 +97,8 @@ Every event is also written to the log.
 | `src/ble.rs` | The Bluetooth service |
 | `src/guard.rs` | The crash guard |
 | `src/board.rs` | Pins and addresses, and what on the board is still unused |
+
+`AGENTS.md` has the working rules for coding agents (and is worth a read for people too).
 
 ## Working on it
 

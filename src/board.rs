@@ -3,7 +3,9 @@
 //! One I2C bus carries the power chip, the touch controller, the motion sensor and the
 //! audio chips. The screen has its own SPI bus with four data lines.
 
-// I2C bus 0, 400 kHz: SDA is GPIO 15, SCL is GPIO 14 (main.rs hands those pins over).
+/// I2C bus 0, 400 kHz.
+pub const I2C_SDA: i32 = 15;
+pub const I2C_SCL: i32 = 14;
 
 /// AXP2101 power chip: battery, charging, the power rails, the PWR button.
 pub const PMIC_ADDR: u8 = 0x34;
@@ -23,9 +25,11 @@ pub const LCD_RESET: i32 = 1;
 
 // The BOOT button is GPIO 0, low when pressed (main.rs hands that pin over).
 
-// On the board and not used yet (the team's to pick up):
-//   QMI8658 gyroscope          I2C 0x6B (its accelerometer is in use: motion.rs)
+// The sound chips (sound.rs has these pins too):
 //   ES8311 speaker codec       I2C 0x18, amplifier enable GPIO 46
 //   ES7210 microphones         I2C 0x40
 //   I2S audio                  MCLK 16, WS 45, BCLK 9, DIN 10, DOUT 8
+//
+// On the board and not used yet (the team's to pick up):
+//   QMI8658 gyroscope          I2C 0x6B (its accelerometer is in use: motion.rs)
 //   Screen tearing signal      GPIO 13

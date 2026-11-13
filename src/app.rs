@@ -2,7 +2,8 @@
 //!
 //! The badge calls `on_event` whenever something happens (see `Event` in badge.rs for the
 //! list) and hands over a `Badge` to answer with: `badge.say("...")` for text under the
-//! eyes, `badge.face` for the eyes, `badge.battery`, `badge.ip`, `badge.tilt`.
+//! eyes, `badge.face` for the eyes, `badge.sound` for the speaker and the microphone,
+//! `badge.battery`, `badge.ip`, `badge.tilt`.
 //! Keep what you need between events in the `App` struct.
 //!
 //! What is here now is a small tour of the hardware, there to be replaced.
@@ -30,8 +31,20 @@ impl App {
                 }
             }
 
-            // BOOT: how the badge is doing.
-            Event::ButtonUp { held_ms } if held_ms < 1000 => {
+            // BOOT held for a second: record three seconds and play them back.
+            Event::ButtonUp { held_ms } if held_ms >= 800 => {
+                badge.sound.beep(660, 80);
+                badge.sound.listen(3000);
+                badge.say_for("listening", 3200);
+            }
+            Event::Heard(recording) => {
+                badge.say(&format!("heard {:.0} s, loudest {}%", recording.seconds(), recording.loudest()));
+                badge.sound.play(recording.samples);
+            }
+
+            // BOOT pressed: how the badge is doing.
+            Event::ButtonUp { .. } => {
+                badge.sound.beep(880, 60);
                 let power = match (badge.battery.charging, badge.battery.on_usb) {
                     (true, _) => "charging",
                     (false, true) => "on USB",

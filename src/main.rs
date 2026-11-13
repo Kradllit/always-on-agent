@@ -10,11 +10,13 @@
 //!   eyes.rs     the face and what a touch does to it
 //!   text.rs     the caption under the eyes
 //!   board.rs    which pin goes where
+//!   bus.rs      the I2C bus the chips share
 //!   power.rs    the power chip: rails, charging, battery level
 //!   display.rs  the screen
 //!   touch.rs    the touch controller
 //!   button.rs   the BOOT button
 //!   motion.rs   the motion sensor: tilt and shakes
+//!   sound.rs    the speaker and the microphones
 //!   wifi.rs     joining the Wi-Fi built into the firmware
 //!   ble.rs      Bluetooth: a status to read, commands and messages to write
 //!   guard.rs    safe mode after repeated crashes at start
@@ -23,12 +25,14 @@ mod app;
 mod badge;
 mod ble;
 mod board;
+mod bus;
 mod button;
 mod display;
 mod eyes;
 mod guard;
 mod motion;
 mod power;
+mod sound;
 mod text;
 mod touch;
 mod wifi;
@@ -39,9 +43,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use esp_idf_svc::eventloop::EspSystemEventLoop;
 use esp_idf_svc::hal::delay::FreeRtos;
-use esp_idf_svc::hal::i2c::{I2cConfig, I2cDriver};
 use esp_idf_svc::hal::peripherals::Peripherals;
-use esp_idf_svc::hal::units::FromValueType;
 use esp_idf_svc::nvs::EspDefaultNvsPartition;
 
 use crate::badge::{Badge, Event};
@@ -119,12 +121,7 @@ fn main() -> Result<()> {
     let peripherals = Peripherals::take()?;
     let events = EspSystemEventLoop::take()?;
     let pins = peripherals.pins;
-    let mut i2c = I2cDriver::new(
-        peripherals.i2c0,
-        pins.gpio15,
-        pins.gpio14,
-        &I2cConfig::new().baudrate(400.kHz().into()),
-    )?;
+    let mut i2c = bus::I2c::new(board::I2C_SDA, board::I2C_SCL)?;
 
     // The power chip sometimes misses the first words after a restart: ask again before
     // giving up, and carry on either way (its rails keep what they had).
@@ -145,6 +142,13 @@ fn main() -> Result<()> {
     let mut face = Face::new();
     let mut caption = text::Caption::new();
     let mut app = app::App::new();
+
+    // Things that happen on other threads (a recording is ready, ...) come in here.
+    let (inbox_send, inbox) = mpsc::channel::<Event>();
+    let sound = sound::start(&i2c, inbox_send.clone()).unwrap_or_else(|error| {
+        log::error!("sound did not start: {error:?}");
+        sound::Sound::silent()
+    });
 
     let status = Arc::new(Mutex::new(Status::default()));
     let (send_command, commands) = mpsc::channel::<Command>();
@@ -207,6 +211,7 @@ fn main() -> Result<()> {
                 Command::Message(text) => happened.push(Event::Message(text)),
             }
         }
+        happened.extend(inbox.try_iter());
         if !happened.is_empty() {
             active_at = now;
         }
@@ -227,7 +232,8 @@ fn main() -> Result<()> {
         // The app's turn.
         if !happened.is_empty() {
             let ip = status.lock().unwrap().ip.clone();
-            let mut badge = Badge { face: &mut face, caption: &mut caption, now, battery, ip, tilt };
+            let mut badge =
+                Badge { face: &mut face, caption: &mut caption, sound: sound.clone(), now, battery, ip, tilt };
             for event in happened.drain(..) {
                 if event != Event::Second {
                     log::info!("event: {event:?}");

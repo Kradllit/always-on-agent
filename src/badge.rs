@@ -8,6 +8,7 @@
 
 use crate::eyes::Face;
 use crate::power::Battery;
+use crate::sound::{Recording, Sound};
 use crate::text::Caption;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -31,6 +32,8 @@ pub enum Event {
     Shake,
     /// A line of text written to the badge over Bluetooth that isn't a built-in command.
     Message(String),
+    /// A recording asked for with `badge.sound.listen(ms)` is ready.
+    Heard(Recording),
     /// Once a second.
     Second,
 }
@@ -39,6 +42,8 @@ pub struct Badge<'a> {
     /// The eyes. See eyes.rs for what they can do (`pet`, `blink`, `startle`, ...).
     pub face: &'a mut Face,
     pub(crate) caption: &'a mut Caption,
+    /// The speaker and the microphone: `beep`, `play`, `listen`, `volume`. See sound.rs.
+    pub sound: Sound,
     /// Milliseconds since the badge started.
     pub now: u64,
     pub battery: Battery,

@@ -32,3 +32,7 @@ embuild = "0.33"
 [[package.metadata.esp-idf-sys.extra_components]]
 remote_component = { name = "espressif/esp_lcd_co5300", version = "2.2.0" }
 bindings_header = "components/bindings.h"
+
+# The speaker and microphone chips (ES8311, ES7210) are set up by Espressif's codec component.
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_codec_dev", version = "~1.6.2" }

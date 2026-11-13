@@ -1,7 +1,6 @@
 //! The QMI8658 motion sensor: which way is down, and whether the badge is being shaken.
 
-use esp_idf_svc::hal::delay::BLOCK;
-use esp_idf_svc::hal::i2c::I2cDriver;
+use crate::bus::I2c;
 
 const COUNTS_PER_G: f32 = 4096.0; // at +-8 g
 /// A shake is three hard jolts (this much change between two readings, in g) within the
@@ -23,13 +22,13 @@ pub struct Motion {
 impl Motion {
     /// Finds and starts the sensor. A badge without one (or one that doesn't answer) just
     /// never reports anything.
-    pub fn new(i2c: &mut I2cDriver) -> Self {
+    pub fn new(i2c: &mut I2c) -> Self {
         let mut motion = Motion { address: None, last: [0.0; 3], settling: 10, jolts: 0, first_jolt: 0, quiet_until: 0 };
         for address in [0x6B, 0x6A] {
             let mut who = [0u8];
-            let found = i2c.write_read(address, &[0x00], &mut who, BLOCK).is_ok() && who[0] == 0x05;
+            let found = i2c.probe(address) && i2c.write_read(address, &[0x00], &mut who).is_ok() && who[0] == 0x05;
             // Registers: 0x02 read several in a row, 0x03 the accelerometer at +-8 g, 0x08 switch it on.
-            if found && [[0x02, 0x40], [0x03, 0x27], [0x08, 0x01]].iter().all(|w| i2c.write(address, w, BLOCK).is_ok()) {
+            if found && [[0x02, 0x40], [0x03, 0x27], [0x08, 0x01]].iter().all(|w| i2c.write(address, w).is_ok()) {
                 motion.address = Some(address);
                 break;
             }
@@ -42,10 +41,10 @@ impl Motion {
 
     /// Call every pass of the main loop. Returns the pull on each axis in g (at rest, the
     /// three together are 1 g pointing down) and whether the badge was just shaken.
-    pub fn poll(&mut self, i2c: &mut I2cDriver, now: u64) -> Option<([f32; 3], bool)> {
+    pub fn poll(&mut self, i2c: &mut I2c, now: u64) -> Option<([f32; 3], bool)> {
         let address = self.address?;
         let mut raw = [0u8; 6];
-        i2c.write_read(address, &[0x35], &mut raw, BLOCK).ok()?;
+        i2c.write_read(address, &[0x35], &mut raw).ok()?;
         let mut g = [0.0f32; 3];
         let mut change = 0.0;
         for i in 0..3 {

@@ -1,10 +1,8 @@
 //! The AXP2101 power chip: it feeds the board, charges the battery and knows how full it is.
 
 use anyhow::Result;
-use esp_idf_svc::hal::delay::BLOCK;
-use esp_idf_svc::hal::i2c::I2cDriver;
-
 use crate::board::PMIC_ADDR;
+use crate::bus::I2c;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Battery {
@@ -15,18 +13,18 @@ pub struct Battery {
     pub on_usb: bool,
 }
 
-fn write(i2c: &mut I2cDriver, reg: u8, value: u8) -> Result<()> {
-    Ok(i2c.write(PMIC_ADDR, &[reg, value], BLOCK)?)
+fn write(i2c: &mut I2c, reg: u8, value: u8) -> Result<()> {
+    i2c.write(PMIC_ADDR, &[reg, value])
 }
 
-fn read(i2c: &mut I2cDriver, reg: u8) -> Result<u8> {
+fn read(i2c: &mut I2c, reg: u8) -> Result<u8> {
     let mut value = [0u8];
-    i2c.write_read(PMIC_ADDR, &[reg], &mut value, BLOCK)?;
+    i2c.write_read(PMIC_ADDR, &[reg], &mut value)?;
     Ok(value[0])
 }
 
 /// Set the board's power up. Call once, before anything else on the board is used.
-pub fn init(i2c: &mut I2cDriver) -> Result<()> {
+pub fn init(i2c: &mut I2c) -> Result<()> {
     write(i2c, 0x22, 0b110)?; // holding PWR switches the badge off
     write(i2c, 0x27, 0x10)?; // ...after 4 seconds
 
@@ -44,7 +42,7 @@ pub fn init(i2c: &mut I2cDriver) -> Result<()> {
     Ok(())
 }
 
-pub fn battery(i2c: &mut I2cDriver) -> Result<Battery> {
+pub fn battery(i2c: &mut I2c) -> Result<Battery> {
     let status = read(i2c, 0x01)?;
     Ok(Battery {
         percent: read(i2c, 0xA4)?.min(100),
@@ -55,7 +53,7 @@ pub fn battery(i2c: &mut I2cDriver) -> Result<Battery> {
 
 /// Switch the badge off. PWR switches it on again.
 #[allow(dead_code)]
-pub fn off(i2c: &mut I2cDriver) -> Result<()> {
+pub fn off(i2c: &mut I2c) -> Result<()> {
     let value = read(i2c, 0x10)?;
     write(i2c, 0x10, value | 0x01)
 }

@@ -4,3 +4,8 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_co5300.h"
+#include "driver/i2c_master.h"
+#include "driver/i2s_std.h"
+#include "driver/i2s_tdm.h"
+#include "esp_codec_dev.h"
+#include "esp_codec_dev_defaults.h"
