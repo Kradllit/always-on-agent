@@ -260,7 +260,7 @@ final class Jensen: ObservableObject {
         }
         var reply = Message(from: .jensen, text: answer.reply)
         reply.actions = (answer.actions ?? []).filter { $0.url != nil }
-        reply.onBadge = badge.pick(headline: "Jensen", why: Self.short(answer.reply))
+        reply.onBadge = badge.answer(Self.short(answer.reply))
         messages.append(reply)
         listener.speak(answer.reply)
     }
@@ -404,7 +404,8 @@ final class Jensen: ObservableObject {
         shown.insert(place.key)
         lastShownAt = Date()
         place.picture = await finder.picture(of: place)
-        let onBadge = badge.pick(headline: picked.headline, why: picked.why)
+        // One card, then its picture.
+        let onBadge = badge.pick(headline: picked.headline, why: picked.why, picture: place.picture)
         say("📍 Spotted something for you:")
         messages.append(Message(from: .jensen, text: "", place: place, onBadge: onBadge))
         if pop == nil { pop = place } else { popQueue.append(place) }
