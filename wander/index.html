@@ -1,0 +1,1056 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wander · city exploration agent prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --paper:#f6f2ea; --ink:#1f1d19; --muted:#7a746a; --line:#e4ddd0;
+  --clay:#d97757; --clay-d:#b85c3e; --clay-l:#f7e4da;
+  --green:#3f7d5c; --green-l:#e1efe6; --red:#c0503a; --blue:#2f6fd6;
+  --brain:#191816; --brain-2:#232220; --brain-3:#2e2c29; --brain-ink:#ece7dd; --brain-muted:#9a9388;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:#ebe5d9;color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:14px}
+button{font-family:inherit;cursor:pointer}
+.top{display:flex;align-items:center;gap:18px;padding:16px 28px 6px}
+.logo{font-family:Fraunces,serif;font-size:26px;font-weight:600;letter-spacing:-.5px}
+.logo span{color:var(--clay)}
+.tagline{color:var(--muted);font-size:13px}
+.loop{margin-left:auto;display:flex;gap:6px;align-items:center}
+.loop .step{padding:5px 11px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:12px;font-weight:600;color:var(--muted);transition:all .25s}
+.loop .step.on{background:var(--clay);border-color:var(--clay);color:#fff;transform:translateY(-1px);box-shadow:0 4px 12px rgba(217,119,87,.35)}
+.loop .arrow{color:#bdb5a7;font-size:12px}
+.stage{display:flex;gap:26px;padding:12px 28px 28px;align-items:flex-start;justify-content:center}
+
+/* ---------- phone ---------- */
+.phone{flex:0 0 392px;height:812px;border-radius:56px;background:#121110;padding:11px;box-shadow:0 30px 60px rgba(40,30,15,.28),inset 0 0 0 2px #2b2926}
+.screen{position:relative;width:100%;height:100%;border-radius:46px;overflow:hidden;background:var(--paper);display:flex;flex-direction:column}
+.statusbar{height:46px;flex:0 0 46px;display:flex;align-items:center;justify-content:space-between;padding:0 30px 0 34px;font-weight:600;font-size:14px;position:relative;z-index:1200}
+.island{position:absolute;left:50%;top:10px;transform:translateX(-50%);width:112px;height:30px;border-radius:20px;background:#121110}
+.views{flex:1;position:relative;overflow:hidden}
+.view{position:absolute;inset:0;display:none;overflow-y:auto}
+.view.active{display:block}
+.tabbar{flex:0 0 74px;display:flex;justify-content:space-around;align-items:flex-start;padding-top:9px;background:#fffdf9;border-top:1px solid var(--line);z-index:1200}
+.tabbar.hidden{display:none}
+.tab{background:none;border:0;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:var(--muted);width:90px;position:relative}
+.tab .ic{font-size:20px;filter:grayscale(1);opacity:.6}
+.tab.active{color:var(--clay-d)}
+.tab.active .ic{filter:none;opacity:1}
+.tab .dot{position:absolute;top:-2px;right:24px;width:8px;height:8px;border-radius:50%;background:var(--clay);display:none}
+.tab .dot.show{display:block}
+
+/* onboarding */
+.onb{padding:8px 22px 30px}
+.onb h1{font-family:Fraunces,serif;font-weight:600;font-size:28px;line-height:1.12;margin:10px 0 8px;letter-spacing:-.4px}
+.onb p.lead{color:var(--muted);margin:0 0 18px;line-height:1.45}
+.wander-av{width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--clay),#e9a37f);display:grid;place-items:center;font-size:22px;box-shadow:0 6px 14px rgba(217,119,87,.35)}
+.q{font-weight:700;font-size:13px;margin:18px 0 9px;display:flex;justify-content:space-between}
+.q small{font-weight:500;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{border:1.5px solid var(--line);background:#fff;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--ink);transition:all .15s}
+.chip.on{border-color:var(--clay);background:var(--clay-l);color:var(--clay-d);font-weight:600}
+.seg{display:flex;background:#ebe4d7;border-radius:12px;padding:3px}
+.seg button{flex:1;border:0;background:none;padding:8px 4px;border-radius:9px;font-size:12.5px;font-weight:600;color:var(--muted)}
+.seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.cta{width:100%;margin-top:24px;border:0;border-radius:16px;background:var(--ink);color:#fff;padding:15px;font-size:15px;font-weight:600}
+.cta:disabled{opacity:.35}
+.ghost{width:100%;margin-top:8px;border:0;background:none;color:var(--muted);font-size:13px;padding:8px}
+.memory-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:14px;margin:6px 0 4px;line-height:1.45}
+.memory-card b{color:var(--clay-d)}
+
+/* explore */
+#map{position:absolute;inset:0;background:#e8e2d6}
+.leaflet-tile-pane{filter:saturate(.7) sepia(.12) brightness(1.03)}
+.leaflet-control-attribution{font-size:9px!important;background:rgba(255,255,255,.6)!important}
+.ov{position:absolute;z-index:1000}
+.pill{top:8px;left:12px;right:12px;display:flex;align-items:center;gap:8px;background:rgba(255,253,249,.95);backdrop-filter:blur(8px);border-radius:14px;padding:9px 12px;box-shadow:0 4px 14px rgba(0,0,0,.08);font-size:12.5px;font-weight:600}
+.pill .live{width:8px;height:8px;border-radius:50%;background:#aaa}
+.pill .live.on{background:var(--green);box-shadow:0 0 0 4px rgba(63,125,92,.18)}
+.pill .area{flex:1}
+.pill .intent{background:var(--clay-l);color:var(--clay-d);border-radius:999px;padding:3px 8px;font-size:11px;display:none}
+.pill .intent.show{display:inline-flex;gap:4px;align-items:center}
+.pill .intent b{cursor:pointer;opacity:.6}
+.bubble{top:58px;left:12px;right:12px;display:flex;gap:9px;align-items:flex-start;background:var(--ink);color:#fff;border-radius:16px;padding:11px 13px;font-size:13px;line-height:1.42;box-shadow:0 8px 20px rgba(0,0,0,.18);opacity:0;transform:translateY(-8px);transition:all .3s;pointer-events:none}
+.bubble.show{opacity:1;transform:none;pointer-events:auto}
+.bubble .av{flex:0 0 26px;height:26px;border-radius:8px;background:var(--clay);display:grid;place-items:center;font-size:14px}
+.recenter{right:12px;bottom:118px;width:40px;height:40px;border-radius:12px;border:0;background:#fff;box-shadow:0 3px 10px rgba(0,0,0,.12);font-size:17px}
+.askbar{left:10px;right:10px;bottom:10px;transition:all .3s}
+.askbar.hide{opacity:0;transform:translateY(20px);pointer-events:none}
+.intents{display:flex;gap:6px;overflow-x:auto;margin-bottom:7px;scrollbar-width:none}
+.intents button{flex:0 0 auto;border:0;background:rgba(255,253,249,.96);border-radius:999px;padding:7px 11px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.ask{display:flex;gap:6px;background:#fff;border-radius:16px;padding:6px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.ask input{flex:1;border:0;outline:0;font:inherit;padding:6px 8px}
+.ask button{border:0;background:var(--clay);color:#fff;border-radius:11px;width:36px;font-size:15px}
+
+.sheet{left:8px;right:8px;bottom:8px;background:#fffdf9;border-radius:24px;padding:16px 16px 14px;box-shadow:0 -6px 30px rgba(0,0,0,.18);transform:translateY(115%);transition:transform .38s cubic-bezier(.2,.9,.25,1.1)}
+.sheet.show{transform:none}
+.sheet .handle{width:36px;height:4px;border-radius:2px;background:#ddd5c6;margin:-6px auto 10px}
+.tap{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;color:var(--clay-d);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.tap .ring{width:8px;height:8px;border-radius:50%;background:var(--clay);animation:ping 1.2s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(217,119,87,.6)}100%{box-shadow:0 0 0 10px rgba(217,119,87,0)}}
+.poi-head{display:flex;gap:11px;align-items:flex-start}
+.poi-emo{flex:0 0 46px;height:46px;border-radius:14px;background:var(--clay-l);display:grid;place-items:center;font-size:24px}
+.poi-head h3{margin:0;font-family:Fraunces,serif;font-size:19px;font-weight:600;line-height:1.15}
+.poi-head .sub{color:var(--muted);font-size:12px;margin-top:3px}
+.match{margin-left:auto;text-align:center;flex:0 0 auto}
+.match b{display:block;font-size:17px;color:var(--green)}
+.match small{font-size:10px;color:var(--muted);font-weight:600}
+.callout{margin:11px 0 8px;font-size:14px;line-height:1.48}
+.callout .src{display:inline-block;font-size:10px;font-weight:700;color:#7d5bd0;background:#efe8fb;border-radius:6px;padding:1px 6px;margin-left:4px;vertical-align:1px}
+.why{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+.why span{font-size:11px;font-weight:600;background:var(--green-l);color:var(--green);border-radius:999px;padding:3px 8px}
+.why span.learned{background:#efe8fb;color:#6a48c2}
+.actions{display:flex;gap:7px}
+.actions button{flex:1;border:0;border-radius:13px;padding:11px 4px;font-weight:600;font-size:13px}
+.a-go{background:var(--ink);color:#fff}
+.a-save{background:#ece5d8;color:var(--ink)}
+.a-skip{background:#fff;border:1.5px solid var(--line)!important;color:var(--muted)}
+.reasons{display:none}
+.reasons p{margin:6px 0 9px;font-size:13px;color:var(--muted)}
+.reasons .actions{flex-direction:column}
+.reasons .actions button{background:#f1ebe0;text-align:left;padding:11px 13px}
+.reasons .actions button small{display:block;font-weight:500;color:var(--muted);font-size:11px;margin-top:2px}
+
+.pin{width:30px;height:30px;border-radius:50% 50% 50% 4px;transform:rotate(-45deg);display:grid;place-items:center;background:#fff;border:2px solid #cfc6b6;box-shadow:0 2px 6px rgba(0,0,0,.18);transition:all .2s}
+.pin i{transform:rotate(45deg);font-style:normal;font-size:14px}
+.pin.notified{border-color:var(--clay);background:var(--clay-l)}
+.pin.visited{border-color:var(--green);background:var(--green-l)}
+.pin.saved{border-color:#7d5bd0;background:#efe8fb}
+.pin.skipped,.pin.suppressed,.pin.closed{opacity:.42;filter:grayscale(.8)}
+.pin.planned{border-color:var(--clay);border-style:dashed}
+.me{width:18px;height:18px;border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 0 0 6px rgba(47,111,214,.22),0 2px 6px rgba(0,0,0,.3)}
+
+/* plan + you */
+.pad{padding:12px 18px 24px}
+.h2{font-family:Fraunces,serif;font-size:24px;font-weight:600;margin:6px 0 2px;letter-spacing:-.3px}
+.subtle{color:var(--muted);font-size:12.5px;line-height:1.45}
+.replan{margin:12px 0 6px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--clay);border-radius:12px;padding:10px 12px;font-size:12.5px;line-height:1.45}
+.replan b{color:var(--clay-d)}
+.tl{position:relative;margin-top:14px}
+.tl-item{display:flex;gap:12px;position:relative}
+.tl-time{flex:0 0 58px;text-align:right;font-weight:700;font-size:12.5px;padding-top:12px}
+.tl-card{flex:1;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:4px}
+.tl-card.new{border-color:var(--clay);box-shadow:0 0 0 3px var(--clay-l)}
+.tl-card .nm{font-weight:700;font-size:14px;display:flex;gap:6px;align-items:center}
+.tl-card .meta{color:var(--muted);font-size:11.5px;margin-top:3px}
+.tl-card .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.tl-card .tags span{font-size:10.5px;font-weight:600;background:#f3ede3;border-radius:6px;padding:2px 6px;color:#6b6458}
+.badge{font-size:9.5px;font-weight:800;letter-spacing:.4px;border-radius:5px;padding:2px 5px;text-transform:uppercase}
+.badge.new{background:var(--clay);color:#fff}
+.badge.saved{background:#efe8fb;color:#6a48c2}
+.badge.meal{background:var(--green-l);color:var(--green)}
+.tl-walk{margin:0 0 4px 70px;font-size:11px;color:var(--muted);padding:3px 0 3px 10px;border-left:2px dotted #cfc6b6}
+.tl-now{display:flex;gap:12px;align-items:center;margin-bottom:6px}
+.tl-now .tl-time{padding:0;color:var(--blue)}
+.tl-now div:last-child{font-size:12.5px;font-weight:600;color:var(--blue)}
+.done{margin-top:18px}
+.done .row{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line)}
+.done .row span:first-child{width:56px;color:var(--muted);font-weight:600}
+.empty{color:var(--muted);text-align:center;padding:30px 10px;font-size:13px}
+
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:14px 0}
+.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 6px;text-align:center}
+.stat b{display:block;font-size:17px}
+.stat small{font-size:10px;color:var(--muted);font-weight:600}
+.sect{font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 8px}
+.tchips{display:flex;flex-wrap:wrap;gap:6px}
+.tchip{background:#fff;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:600}
+.tchip em{font-style:normal;color:var(--muted);font-weight:500;margin-left:3px}
+.tchip.learned{border-color:#cbb8f0;background:#f6f1fe}
+.tchip.neg{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(192,80,58,.5)}
+.ins{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:7px;font-size:13px;line-height:1.45}
+.ins small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.btnrow{display:flex;gap:8px;margin-top:18px}
+.btnrow button{flex:1;border:1.5px solid var(--line);background:#fff;border-radius:12px;padding:10px;font-weight:600;font-size:12.5px}
+
+/* ---------- brain ---------- */
+.brain{flex:1;max-width:920px;min-width:560px;height:812px;background:var(--brain);border-radius:28px;color:var(--brain-ink);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 60px rgba(40,30,15,.22)}
+.b-head{padding:16px 20px 12px;border-bottom:1px solid var(--brain-3);display:flex;align-items:center;gap:12px}
+.b-head h2{margin:0;font-family:Fraunces,serif;font-weight:500;font-size:19px}
+.b-head .sub{color:var(--brain-muted);font-size:12px}
+.controls{display:flex;gap:6px;margin-left:auto;align-items:center}
+.cbtn{border:1px solid var(--brain-3);background:var(--brain-2);color:var(--brain-ink);border-radius:10px;padding:7px 11px;font-size:12px;font-weight:600}
+.cbtn:hover{background:var(--brain-3)}
+.cbtn.primary{background:var(--clay);border-color:var(--clay);color:#fff}
+.cbtn.on{border-color:var(--clay);color:#f0b49c}
+.b-body{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:0;min-height:0}
+.col{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--brain-3)}
+.col:last-child{border-right:0}
+.card{padding:14px 18px;border-bottom:1px solid var(--brain-3)}
+.card.grow{flex:1;overflow-y:auto;min-height:0}
+.ctitle{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--brain-muted);margin-bottom:10px}
+.ctitle .r{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.legend{display:flex;gap:12px;font-size:11px;color:var(--brain-muted);margin-bottom:8px}
+.legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:4px;vertical-align:1px}
+.trow{display:grid;grid-template-columns:118px 1fr 44px;align-items:center;gap:8px;height:21px;font-size:12px}
+.trow .lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .lab .mk{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:1px;background:#555}
+.trow .lab .mk.seed{background:var(--clay)}
+.trow .lab .mk.learned{background:#a98bf0}
+.bar{position:relative;height:7px;background:var(--brain-3);border-radius:4px}
+.bar .zero{position:absolute;left:33.3%;top:-3px;bottom:-3px;width:1px;background:#5a5650}
+.bar .fill{position:absolute;top:0;bottom:0;border-radius:4px;transition:all .6s cubic-bezier(.2,.9,.3,1)}
+.trow .val{text-align:right;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--brain-muted);position:relative}
+.delta{position:absolute;right:46px;font-family:'JetBrains Mono',monospace;font-size:10.5px;font-weight:600;animation:fade 2.4s forwards}
+@keyframes fade{0%{opacity:0;transform:translateX(6px)}15%{opacity:1;transform:none}75%{opacity:1}100%{opacity:0}}
+.ctx{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:12px}
+.ctx span:nth-child(odd){color:var(--brain-muted)}
+.theta{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12px}
+.theta .track{flex:1;height:6px;background:var(--brain-3);border-radius:3px;position:relative}
+.theta .track div{position:absolute;top:-4px;width:3px;height:14px;background:var(--clay);border-radius:2px;transition:left .5s}
+.binsight{background:var(--brain-2);border:1px solid var(--brain-3);border-radius:12px;padding:9px 11px;margin-bottom:7px;font-size:12.5px;line-height:1.45;animation:slidein .4s}
+.binsight small{display:block;color:var(--brain-muted);font-size:10.5px;margin-top:3px}
+.binsight.claude{border-color:#4e3f73}
+@keyframes slidein{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.trace{font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.55}
+.trace .ln{padding:1px 0;animation:slidein .3s;word-break:break-word}
+.trace .t{color:#6d675e;margin-right:6px}
+.k-sense{color:#7fb0ff}.k-score{color:#e5c07b}.k-nudge{color:#f0a07f}.k-learn{color:#98d4a8}.k-plan{color:#c7a6ff}.k-quiet{color:#7d776d}.k-claude{color:#d2b8ff}.k-user{color:#fff}
+.quiet{display:flex;flex-wrap:wrap;gap:5px}
+.quiet span{font-size:11px;background:var(--brain-2);border:1px solid var(--brain-3);border-radius:8px;padding:3px 7px;color:var(--brain-muted)}
+.quiet span b{color:#bdb5a7;font-weight:600}
+.settings{display:none;padding:12px 18px;border-bottom:1px solid var(--brain-3);background:#201f1c;font-size:12px}
+.settings.show{display:block}
+.settings label{display:block;color:var(--brain-muted);margin:6px 0 4px}
+.settings input,.settings select{width:100%;background:var(--brain-2);border:1px solid var(--brain-3);color:var(--brain-ink);border-radius:8px;padding:8px;font:inherit}
+.settings .row{display:flex;gap:10px;align-items:flex-end}
+.settings .row>div{flex:1}
+.settings p{color:var(--brain-muted);margin:8px 0 0;line-height:1.4;font-size:11px}
+.speed{display:flex;border:1px solid var(--brain-3);border-radius:10px;overflow:hidden}
+.speed button{border:0;background:var(--brain-2);color:var(--brain-muted);padding:7px 9px;font-size:11.5px;font-weight:600}
+.speed button.on{background:var(--brain-3);color:#fff}
+@media (max-width:1100px){.b-body{grid-template-columns:1fr}.brain{min-width:380px}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo">Wander<span>.</span></div>
+  <div class="tagline">A city companion that learns your taste as you walk</div>
+  <div class="loop" id="loop">
+    <div class="step" data-s="sense">Sense</div><div class="arrow">›</div>
+    <div class="step" data-s="score">Score</div><div class="arrow">›</div>
+    <div class="step" data-s="nudge">Nudge</div><div class="arrow">›</div>
+    <div class="step" data-s="learn">Learn</div><div class="arrow">›</div>
+    <div class="step" data-s="plan">Replan</div><div class="arrow">↺</div>
+  </div>
+</div>
+
+<div class="stage">
+  <!-- ================= PHONE ================= -->
+  <div class="phone">
+    <div class="screen">
+      <div class="statusbar"><span id="sb-time">1:00</span><div class="island"></div><span>●●● 5G ▮</span></div>
+      <div class="views">
+
+        <!-- Onboarding -->
+        <div class="view active" id="v-onb">
+          <div class="onb">
+            <div class="wander-av">🧭</div>
+            <div id="onb-return" style="display:none">
+              <h1>Welcome back.</h1>
+              <div class="memory-card" id="onb-memory"></div>
+              <button class="cta" id="btn-continue">Pick up where we left off</button>
+              <button class="ghost" id="btn-fresh">Start fresh instead</button>
+            </div>
+            <div id="onb-new">
+              <h1>Hi, I'm Wander. What makes a great day out for you?</h1>
+              <p class="lead">Pick a few to start. I'll learn the rest as we walk: what you stop for, what you skip, where you linger.</p>
+              <div class="q">I'm into <small id="pick-count">pick 2+</small></div>
+              <div class="chips" id="interest-chips"></div>
+              <div class="q">My pace</div>
+              <div class="seg" data-pref="pace">
+                <button data-v="leisurely">Leisurely</button><button data-v="normal" class="on">Normal</button><button data-v="brisk">Brisk</button>
+              </div>
+              <div class="q">Time I have today</div>
+              <div class="seg" data-pref="time">
+                <button data-v="120">2 hrs</button><button data-v="240">Afternoon</button><button data-v="420" class="on">Through dinner</button>
+              </div>
+              <div class="q">How often should I tap you?</div>
+              <div class="seg" data-pref="chat">
+                <button data-v="0.6">Only the best</button><button data-v="0.5" class="on">Balanced</button><button data-v="0.38">Tell me lots</button>
+              </div>
+              <button class="cta" id="btn-start" disabled>Start exploring San Francisco</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Explore -->
+        <div class="view" id="v-explore">
+          <div id="map"></div>
+          <div class="ov pill">
+            <span class="live" id="live"></span>
+            <span class="area" id="area">Embarcadero</span>
+            <span class="intent" id="intent-chip"><span id="intent-label"></span><b id="intent-x">✕</b></span>
+          </div>
+          <div class="ov bubble" id="bubble"><div class="av">🧭</div><div id="bubble-text"></div></div>
+          <button class="ov recenter" id="recenter" title="Recenter">◎</button>
+          <div class="ov askbar" id="askbar">
+            <div class="intents">
+              <button data-q="I'm hungry">🍽 I'm hungry</button>
+              <button data-q="I need coffee">☕ Coffee</button>
+              <button data-q="Somewhere to sit for a bit">🪑 Need a sit</button>
+              <button data-q="Surprise me with something hidden">🎲 Surprise me</button>
+              <button data-q="Where should I get a drink?">🍸 Drinks</button>
+            </div>
+            <form class="ask" id="ask"><input id="ask-in" placeholder="Ask Wander anything about around here…" autocomplete="off"><button>↑</button></form>
+          </div>
+          <div class="ov sheet" id="sheet">
+            <div class="handle"></div>
+            <div class="tap" id="sheet-tap"><span class="ring"></span><span id="sheet-tap-text">Heads up</span></div>
+            <div class="poi-head">
+              <div class="poi-emo" id="s-emo"></div>
+              <div><h3 id="s-name"></h3><div class="sub" id="s-sub"></div></div>
+              <div class="match"><b id="s-match"></b><small>MATCH</small></div>
+            </div>
+            <div id="s-main">
+              <div class="callout" id="s-callout"></div>
+              <div class="why" id="s-why"></div>
+              <div class="actions">
+                <button class="a-go" id="a-go">I'm going in</button>
+                <button class="a-save" id="a-save">Save for later</button>
+                <button class="a-skip" id="a-skip">Not for me</button>
+              </div>
+            </div>
+            <div class="reasons" id="s-reasons">
+              <p>Got it. Help me learn: why not?</p>
+              <div class="actions">
+                <button data-r="taste">Not my thing<small>I'll show you fewer places like this</small></button>
+                <button data-r="timing">Not right now<small>Timing only, your taste stays the same</small></button>
+                <button data-r="been">Been there already<small>I'll count that as a point in its favor</small></button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Plan -->
+        <div class="view" id="v-plan"><div class="pad" id="plan-body"></div></div>
+
+        <!-- You -->
+        <div class="view" id="v-you"><div class="pad" id="you-body"></div></div>
+      </div>
+      <div class="tabbar hidden" id="tabbar">
+        <button class="tab active" data-v="explore"><span class="ic">🗺️</span>Explore</button>
+        <button class="tab" data-v="plan"><span class="ic">🗓️</span>Plan<span class="dot" id="plan-dot"></span></button>
+        <button class="tab" data-v="you"><span class="ic">✨</span>You<span class="dot" id="you-dot"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= AGENT BRAIN ================= -->
+  <div class="brain">
+    <div class="b-head">
+      <div>
+        <h2>Agent brain</h2>
+        <div class="sub">What Wander senses, decides and learns. Demo controls simulate the walk.</div>
+      </div>
+      <div class="controls">
+        <button class="cbtn primary" id="c-play">▶ Walk</button>
+        <div class="speed" id="c-speed"><button data-x="1" class="on">1×</button><button data-x="2">2×</button><button data-x="4">4×</button></div>
+        <button class="cbtn" id="c-linger" title="Simulate stopping here for 10 minutes">⏸ Linger</button>
+        <button class="cbtn" id="c-reset" title="Restart the walk (keeps what Wander learned)">↺</button>
+        <button class="cbtn" id="c-settings" title="Claude settings">⚙︎ Claude</button>
+      </div>
+    </div>
+    <div class="settings" id="settings">
+      <div class="row">
+        <div><label>Anthropic API key (stored in this browser only)</label><input id="api-key" type="password" placeholder="sk-ant-..."></div>
+        <div style="flex:0 0 190px"><label>Model</label>
+          <select id="api-model"><option value="claude-opus-5-5">Claude Opus 5.5</option><option value="claude-sonnet-5-5">Claude Sonnet 5.5</option><option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest)</option></select></div>
+        <button class="cbtn" id="api-save">Save</button>
+      </div>
+      <p>With a key, Claude writes the callouts, answers "Ask Wander", and reflects on your profile. Without one, Wander uses built-in templates so the demo always works. For a real deployment, proxy calls through a backend instead of putting a key in the browser.</p>
+    </div>
+    <div class="b-body">
+      <div class="col">
+        <div class="card">
+          <div class="ctitle">Context window <span class="r" id="ctx-claude">templates mode</span></div>
+          <div class="ctx" id="ctx"></div>
+          <div class="theta"><span style="color:var(--brain-muted)">Tap threshold θ</span><div class="track"><div id="theta-mk"></div></div><span id="theta-v" style="font-family:'JetBrains Mono',monospace">0.50</span></div>
+        </div>
+        <div class="card grow" style="padding-bottom:10px">
+          <div class="ctitle">Taste model <span class="r">long-term memory</span></div>
+          <div class="legend"><span><i style="background:var(--clay)"></i>you told me</span><span><i style="background:#a98bf0"></i>I learned</span><span><i style="background:#555"></i>unknown</span></div>
+          <div id="taste"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <div class="ctitle">Stayed quiet about <span class="r" id="quiet-n">0 places</span></div>
+          <div class="quiet" id="quiet"><span>Places I pass but don't think you'd care about show up here.</span></div>
+        </div>
+        <div class="card" style="max-height:250px;overflow-y:auto">
+          <div class="ctitle">Reflections <span class="r"><button class="cbtn" id="c-reflect" style="padding:4px 9px;font-size:11px">Reflect now</button></span></div>
+          <div id="insights"><div style="color:var(--brain-muted);font-size:12px">Nothing yet. I'll write down what I notice about you here.</div></div>
+        </div>
+        <div class="card grow" id="trace-wrap">
+          <div class="ctitle">Agent trace <span class="r">tool calls + decisions</span></div>
+          <div class="trace" id="trace"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ======================================================================
+   DATA
+   ====================================================================== */
+const TAGS = {
+  food:{l:'Food',e:'🍜'}, italian:{l:'Italian',e:'🍝',parent:'food'}, chinese:{l:'Chinese',e:'🥟',parent:'food'},
+  sweets:{l:'Sweets',e:'🥮',parent:'food'}, coffee:{l:'Coffee',e:'☕'}, bars:{l:'Bars',e:'🍸'},
+  architecture:{l:'Architecture',e:'🏛'}, historic:{l:'Old buildings',e:'🧱',parent:'architecture'}, modern:{l:'Modern towers',e:'🏙',parent:'architecture'},
+  museums:{l:'Museums',e:'🖼'}, art:{l:'Art & murals',e:'🎨'}, history:{l:'History',e:'📜'},
+  literature:{l:'Books & Beats',e:'📚'}, culture:{l:'Local culture',e:'🏮'}, parks:{l:'Parks',e:'🌳'},
+  views:{l:'Views',e:'🌇'}, science:{l:'Science',e:'🧪'}, shopping:{l:'Shopping',e:'🛍'}, hidden:{l:'Hidden gems',e:'🕵️'}
+};
+const INTERESTS = [
+  {id:'food',l:'🍜 Food',tags:['food']}, {id:'coffee',l:'☕ Coffee',tags:['coffee']},
+  {id:'architecture',l:'🏛 Architecture',tags:['architecture']}, {id:'museums',l:'🖼 Museums & art',tags:['museums','art']},
+  {id:'parks',l:'🌳 Parks',tags:['parks']}, {id:'history',l:'📜 History',tags:['history']},
+  {id:'literature',l:'📚 Books',tags:['literature']}, {id:'views',l:'🌇 Views',tags:['views']},
+  {id:'bars',l:'🍸 Bars',tags:['bars']}, {id:'science',l:'🧪 Science',tags:['science']},
+  {id:'shopping',l:'🛍 Shopping',tags:['shopping']}, {id:'hidden',l:'🕵️ Hidden gems',tags:['hidden']}
+];
+const H = (h,m=0)=>h*60+m;
+const POIS = [
+ {id:'ferry',n:'Ferry Building Marketplace',e:'🏛',ll:[37.79555,-122.39350],area:'Embarcadero',tags:{food:.8,shopping:.5,architecture:.5,historic:.5,coffee:.3},open:H(8),close:H(20),dwell:30,price:'$$',b:'1898 Beaux-Arts ferry terminal with a 245 ft clock tower, now a food hall full of Bay Area producers.'},
+ {id:'fountain',n:'Vaillancourt Fountain',e:'⛲',ll:[37.79515,-122.39600],area:'Embarcadero',tags:{art:.7,modern:.6,parks:.3},open:0,close:H(24),dwell:8,price:'Free',b:'A 1971 Brutalist concrete fountain you can walk through. People either love it or want it gone.'},
+ {id:'jackson',n:'Jackson Square Historic District',e:'🧱',ll:[37.79700,-122.40130],area:'Jackson Square',tags:{historic:1,architecture:.8,history:.8,shopping:.3},open:0,close:H(24),dwell:15,price:'Free',b:'One of the few blocks that survived the 1906 quake and fire. Gold Rush brick buildings, now antique dealers and design studios.'},
+ {id:'transamerica',n:'Transamerica Pyramid & Redwood Park',e:'🏙',ll:[37.79560,-122.40250],area:'Financial District',tags:{modern:1,architecture:.8,parks:.3},open:H(8),close:H(18),dwell:10,price:'Free',b:'The 853 ft pyramid from 1972, with a half-acre grove of redwoods hiding at its base.'},
+ {id:'sentinel',n:'Columbus Tower',e:'🏢',ll:[37.79585,-122.40455],area:'North Beach',tags:{historic:.9,architecture:.9,history:.5,hidden:.3},open:0,close:H(24),dwell:5,price:'Free',b:'Copper-green 1907 flatiron. Francis Ford Coppola\'s American Zoetrope has owned it since the 1970s.'},
+ {id:'portsmouth',n:'Portsmouth Square',e:'🀄',ll:[37.79495,-122.40550],area:'Chinatown',tags:{culture:.8,history:.7,chinese:.4,parks:.3},open:0,close:H(24),dwell:10,price:'Free',b:'Where the 1848 gold discovery was shouted to the town. Today it is Chinatown\'s living room, with elders playing Chinese chess.'},
+ {id:'tinhow',n:'Tin How Temple',e:'🏮',ll:[37.79440,-122.40670],area:'Chinatown',tags:{culture:1,history:.8,hidden:.8,chinese:.5},open:H(10),close:H(16),dwell:15,price:'Donation',b:'Founded in 1852, one of the oldest Chinese temples in the US, three flights up on Waverly Place. Incense and red lanterns.'},
+ {id:'fortune',n:'Golden Gate Fortune Cookie Factory',e:'🥠',ll:[37.79555,-122.40705],area:'Chinatown',tags:{sweets:.8,chinese:.8,hidden:.7,food:.4,culture:.4},open:H(9),close:H(18),dwell:10,price:'$',b:'A tiny Ross Alley shop folding cookies by hand since 1962. Bring cash for a warm bag.'},
+ {id:'goodmongkok',n:'Good Mong Kok Bakery',e:'🥟',ll:[37.79545,-122.40800],area:'Chinatown',tags:{food:.9,chinese:1,hidden:.5,sweets:.2},open:H(7),close:H(18),dwell:10,price:'$',b:'Cash-only dim sum to go. Locals queue for har gow and pork buns that cost a couple of dollars.'},
+ {id:'citylights',n:'City Lights Booksellers',e:'📚',ll:[37.79760,-122.40645],area:'North Beach',tags:{literature:1,history:.6,shopping:.5,culture:.4},open:H(10),close:H(24),dwell:25,price:'Free',b:'Lawrence Ferlinghetti\'s 1953 bookstore, which published Ginsberg\'s Howl. The upstairs poetry room is the move.'},
+ {id:'vesuvio',n:'Vesuvio Cafe',e:'🍷',ll:[37.79780,-122.40675],area:'North Beach',tags:{bars:1,literature:.6,history:.5,hidden:.3},open:H(11),close:H(26),dwell:40,price:'$$',b:'Kerouac\'s old haunt across Jack Kerouac Alley from City Lights. Stained glass, open since 1948.'},
+ {id:'beat',n:'The Beat Museum',e:'✒️',ll:[37.79810,-122.40610],area:'North Beach',tags:{museums:.9,literature:.9,history:.7},open:H(10),close:H(19),dwell:40,price:'$',b:'Typewriters, first editions and Beat Generation ephemera on Broadway, run by true believers.'},
+ {id:'tosca',n:'Tosca Cafe',e:'🥃',ll:[37.79745,-122.40590],area:'North Beach',tags:{bars:.9,italian:.6,history:.5,food:.4},open:H(17),close:H(24),dwell:60,price:'$$$',b:'A 1919 bar with red leather booths. The house "cappuccino" is brandy and chocolate, no coffee.'},
+ {id:'trieste',n:'Caffe Trieste',e:'☕',ll:[37.79865,-122.40725],area:'North Beach',tags:{coffee:1,italian:.8,history:.5,literature:.4},open:H(7),close:H(22),dwell:20,price:'$',b:'Opened in 1956 as the West Coast\'s first espresso house. Coppola reportedly wrote much of The Godfather here.'},
+ {id:'molinari',n:'Molinari Delicatessen',e:'🥪',ll:[37.79885,-122.40870],area:'North Beach',tags:{food:1,italian:1,historic:.3},open:H(9),close:H(18),dwell:15,price:'$',b:'An Italian deli since 1896. Take a number, then order a sandwich on a Dutch crunch roll.'},
+ {id:'sottomare',n:'Sotto Mare Oysteria',e:'🦪',ll:[37.79955,-122.40800],area:'North Beach',tags:{food:1,italian:.6},open:H(11,30),close:H(21),dwell:60,price:'$$',b:'Old-school North Beach seafood spot, famous for a cioppino that takes two hands.'},
+ {id:'goldenboy',n:'Golden Boy Pizza',e:'🍕',ll:[37.79985,-122.40880],area:'North Beach',tags:{food:.9,italian:.8,hidden:.4},open:H(11,30),close:H(23),dwell:15,price:'$',b:'Square focaccia-style slices, standing room only, since 1978.'},
+ {id:'tonys',n:'Tony\'s Pizza Napoletana',e:'🍕',ll:[37.80045,-122.40930],area:'North Beach',tags:{food:1,italian:1},open:H(12),close:H(22),dwell:60,price:'$$',b:'World pizza champion Tony Gemignani\'s place. The Margherita is made in limited numbers each day.'},
+ {id:'washsq',n:'Washington Square Park',e:'🌳',ll:[37.80080,-122.41010],area:'North Beach',tags:{parks:1,culture:.3,views:.2},open:0,close:H(24),dwell:20,price:'Free',b:'North Beach\'s front lawn: tai chi in the mornings, picnics all afternoon, twin church spires as a backdrop.'},
+ {id:'sspp',n:'Saints Peter and Paul Church',e:'⛪',ll:[37.80165,-122.41045],area:'North Beach',tags:{architecture:.9,historic:.7,culture:.5,italian:.3},open:H(7,30),close:H(16),dwell:15,price:'Free',b:'The 1924 twin-spired "Italian Cathedral of the West". Joe DiMaggio took his wedding photos on these steps.'},
+ {id:'coit',n:'Coit Tower',e:'🗼',ll:[37.80240,-122.40585],area:'Telegraph Hill',tags:{views:1,art:.7,history:.6,architecture:.4,historic:.3},open:H(10),close:H(18),dwell:40,price:'$',b:'A 1933 Art Deco tower with Depression-era WPA murals inside and a 360 degree view from the top.'},
+ {id:'filbert',n:'Filbert Street Steps',e:'🪜',ll:[37.80200,-122.40450],area:'Telegraph Hill',tags:{hidden:.9,views:.8,parks:.7},open:0,close:H(24),dwell:15,price:'Free',b:'A wooden stairway down Telegraph Hill through cottage gardens. Listen for the wild parrots.'},
+ {id:'levis',n:'Levi\'s Plaza',e:'👖',ll:[37.80300,-122.40130],area:'Telegraph Hill',tags:{parks:.5,modern:.5,shopping:.2},open:0,close:H(24),dwell:10,price:'Free',b:'Levi Strauss HQ, with a landscaped plaza and creek-style fountain at the foot of the hill.'},
+ {id:'exploratorium',n:'Exploratorium',e:'🧪',ll:[37.80170,-122.39730],area:'Embarcadero',tags:{science:1,museums:.9,art:.4},open:H(10),close:H(17),dwell:90,price:'$$$',b:'Hands-on science museum on Pier 15. The Tactile Dome is a pitch-black crawl you will not forget.'},
+ // off the walking route: only reachable through the plan
+ {id:'cablecar',n:'Cable Car Museum',e:'🚋',ll:[37.79460,-122.41150],area:'Nob Hill',tags:{museums:.8,history:.8,science:.6,hidden:.4},open:H(10),close:H(17),dwell:30,price:'Free',b:'Watch the actual winding wheels that pull every cable car in the city. Free.'},
+ {id:'grace',n:'Grace Cathedral',e:'⛪',ll:[37.79190,-122.41340],area:'Nob Hill',tags:{architecture:1,historic:.8,art:.5,culture:.3},open:H(9),close:H(17),dwell:25,price:'$',b:'Gothic cathedral atop Nob Hill with a walkable labyrinth and doors cast from Ghiberti\'s Gates of Paradise.'},
+ {id:'lombard',n:'Lombard Street',e:'🌺',ll:[37.80210,-122.41870],area:'Russian Hill',tags:{views:.8,parks:.3,architecture:.3},open:0,close:H(24),dwell:20,price:'Free',b:'The crooked block: eight hairpin turns lined with hydrangeas.'}
+];
+const POI = Object.fromEntries(POIS.map(p=>[p.id,p]));
+const ROUTE = [
+ [37.79555,-122.39350],[37.79500,-122.39580],[37.79620,-122.39850],[37.79720,-122.40050],[37.79690,-122.40220],
+ [37.79590,-122.40240],[37.79565,-122.40420],[37.79500,-122.40530],[37.79520,-122.40640],[37.79455,-122.40655],
+ [37.79520,-122.40645],[37.79555,-122.40695],[37.79545,-122.40780],[37.79710,-122.40830],[37.79740,-122.40700],
+ [37.79765,-122.40630],[37.79810,-122.40625],[37.79870,-122.40715],[37.79890,-122.40860],[37.79975,-122.40905],
+ [37.80060,-122.40990],[37.80160,-122.41020],[37.80190,-122.40800],[37.80230,-122.40640],[37.80240,-122.40585],
+ [37.80200,-122.40450],[37.80220,-122.40250],[37.80300,-122.40120],[37.80250,-122.39850],[37.80170,-122.39730]
+];
+const RADIUS = 60;          // awareness radius (m)
+const START_CLOCK = H(13);  // 1:00 PM
+const PACE = {leisurely:65, normal:80, brisk:95}; // m per sim minute
+
+/* ======================================================================
+   STATE
+   ====================================================================== */
+const LS_KEY='wander_profile_v1', LS_API='wander_api_v1';
+let PROFILE = null;   // long-term memory (persisted)
+let S = null;         // this walk (session)
+const blankProfile = () => ({P:{}, n:{}, seeded:[], evidence:{}, insights:[], insightKeys:[], threshold:.5, prefs:{pace:'normal',time:420,chat:.5}, trips:0, history:[]});
+function saveProfile(){ localStorage.setItem(LS_KEY, JSON.stringify(PROFILE)); }
+function loadProfile(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ return null; } }
+function newSession(){
+  return {seg:0, segPos:0, pos:ROUTE[0].slice(), playing:false, speed:1, clock:START_CLOCK, walked:0,
+    poi:{}, queue:[], active:null, intent:null, plan:[], prevPlanIds:null, lastReplanNote:'', quiet:[], done:[],
+    lastMeal:null, stats:{notified:0, accepted:0, suppressed:0, visited:0}, follow:true, wasPlaying:false, finished:false};
+}
+
+/* ======================================================================
+   UTIL
+   ====================================================================== */
+const $ = s=>document.querySelector(s), $$ = s=>[...document.querySelectorAll(s)];
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+function dist(a,b){const R=6371000,r=Math.PI/180,dLa=(b[0]-a[0])*r,dLo=(b[1]-a[1])*r;const x=Math.sin(dLa/2)**2+Math.cos(a[0]*r)*Math.cos(b[0]*r)*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+function fmt(m){m=Math.round(m);let h=Math.floor(m/60)%24,mm=m%60;const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(mm).padStart(2,'0')} ${ap}`;}
+const fmtShort = m=>fmt(m).replace(' PM','p').replace(' AM','a');
+const walkMin = (a,b)=>Math.max(1,Math.round(dist(a,b)*1.3/PACE[PROFILE.prefs.pace]));
+const esc = s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const P = t=>PROFILE.P[t]??0;
+const isOpen=(p,m)=>m>=p.open && m<p.close;
+const learnedTag = t=>!PROFILE.seeded.includes(t) && P(t)>=.3;
+
+/* ======================================================================
+   SCORING  (taste x place tags, plus time-of-day fit and short-term intent)
+   ====================================================================== */
+function timeFit(p,m){
+  let f=0; const g=p.tags;
+  if((g.food||0)>=.8){ if(m>=H(11,30)&&m<=H(14)) f+=.12; else if(m>=H(17,30)&&m<=H(20,30)) f+=p.dwell>=45?.18:.08; else if(p.dwell>=45) f-=.15; }
+  if((g.coffee||0)>=.8){ if((m>=H(7)&&m<=H(11))||(m>=H(14)&&m<=H(16,30))) f+=.08; if(m>=H(18)) f-=.15; }
+  if((g.bars||0)>=.8){ if(m>=H(17)) f+=.15; else if(m<H(16)) f-=.22; }
+  if((g.views||0)>=.8 && m>=H(17) && m<=H(18,30)) f+=.06;
+  return f;
+}
+const INTENTS = {
+  hungry:{l:'🍽 hungry',tags:{food:.35,sweets:.1}},
+  coffee:{l:'☕ coffee',tags:{coffee:.45}},
+  rest:{l:'🪑 rest',tags:{parks:.3,coffee:.15,views:.1}},
+  surprise:{l:'🎲 surprise',tags:{hidden:.4}},
+  drinks:{l:'🍸 drinks',tags:{bars:.45}}
+};
+function score(p,m=S.clock,{intent=true,saved=false}={}){
+  let num=0,den=0; const contrib=[];
+  for(const [t,w] of Object.entries(p.tags)){ num+=P(t)*w; den+=w; contrib.push({t,v:P(t)*w}); }
+  const base = num/Math.pow(den,.6);
+  const fit = timeFit(p,m);
+  let ib=0; if(intent && S.intent){ for(const [t,b] of Object.entries(INTENTS[S.intent].tags)) ib+=(p.tags[t]||0)*b; }
+  const sb = saved && S.poi[p.id]==='saved' ? .12 : 0;
+  const raw = clamp(.15 + base*.95 + fit + ib + sb, .02, .99);
+  const s = raw*satiety(p,m), sat = s-raw;
+  contrib.sort((a,b)=>b.v-a.v);
+  return {s, base, fit, sat, ib, contrib};
+}
+function satiety(p,m){
+  // just ate? food places fade for a couple of hours (short-term state, not taste)
+  if(S.lastMeal==null || (p.tags.food||0)<.5) return 1;
+  const since=m-S.lastMeal; if(since<0||since>150) return 1;
+  return 1-.6*(1-since/150)*p.tags.food;
+}
+function whyTags(p){ return score(p).contrib.filter(c=>c.v>.05).slice(0,3).map(c=>c.t); }
+
+/* ======================================================================
+   LEARNING  (update taste model from explicit + implicit signals)
+   ====================================================================== */
+const SIG = {visit:1, save:.45, dwell:.5, been:.3, timing:-.08, taste:-.6, ignored:-.2};
+const VERB = {visit:'went into', save:'saved', dwell:'lingered at', been:'had already been to', taste:'passed on', ignored:'walked past', timing:'postponed'};
+function learn(p, kind){
+  const sig = SIG[kind]; const deltas=[];
+  for(const [t,w] of Object.entries(p.tags)){
+    const cur=P(t); let d;
+    if(sig>0) d = .3*sig*w*(1-cur);
+    // credit assignment: blame goes mostly to tags you haven't vouched for
+    else d = .3*sig*w*(1-Math.max(0,cur))*(cur>0?.5:1);
+    if(Math.abs(d)<.004) continue;
+    PROFILE.P[t] = clamp(cur+d,-1,1);
+    PROFILE.n[t] = (PROFILE.n[t]||0)+w;
+    (PROFILE.evidence[t] ||= []).push({id:p.id, kind});
+    deltas.push({t,d});
+  }
+  // adapt how chatty we are
+  const old=PROFILE.threshold;
+  if(kind==='taste'||kind==='ignored') PROFILE.threshold=clamp(PROFILE.threshold+.025,.3,.72);
+  if(kind==='visit'||kind==='save') PROFILE.threshold=clamp(PROFILE.threshold-.012,.3,.72);
+  PROFILE.history.push({id:p.id,kind,at:S.clock});
+  saveProfile();
+  pulse('learn');
+  const dstr = deltas.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d)).slice(0,4).map(x=>`${x.t} ${x.d>0?'+':''}${x.d.toFixed(2)}`).join(', ');
+  trace('learn', `update_taste(${p.n}, signal=${kind} ${sig>0?'+':''}${sig}) → ${dstr||'no change'}`);
+  if(Math.abs(old-PROFILE.threshold)>.001) trace('learn', `notify_threshold θ ${old.toFixed(2)} → ${PROFILE.threshold.toFixed(2)}`);
+  renderTaste(deltas);
+  checkInsights(p, kind);
+  replan(`${VERB[kind]} ${p.n}`);
+  renderYou();
+}
+
+/* rule-based reflections: the agent writing notes to itself */
+function evidenceText(t){
+  const ev=(PROFILE.evidence[t]||[]).filter(e=>SIG[e.kind]>0);
+  const seen=new Set(); const parts=[];
+  for(const e of ev.slice().reverse()){ if(seen.has(e.id)) continue; seen.add(e.id); parts.push(e); if(parts.length>=2) break; }
+  if(parts.length===2 && parts[0].kind===parts[1].kind) return `${VERB[parts[0].kind]} ${POI[parts[0].id].n} and ${POI[parts[1].id].n}`;
+  return parts.map(e=>`${VERB[e.kind]} ${POI[e.id].n}`).join(' and ');
+}
+function addInsight(key,text,src){
+  if(PROFILE.insightKeys.includes(key)) return;
+  PROFILE.insightKeys.push(key);
+  PROFILE.insights.unshift({text,src,at:S.clock,claude:false});
+  saveProfile(); renderInsights(); $('#you-dot').classList.add('show');
+  trace('learn', `write_memory("${text}")`);
+}
+function checkInsights(p,kind){
+  for(const t of Object.keys(TAGS)){
+    const v=P(t), tg=TAGS[t];
+    const pos=new Set((PROFILE.evidence[t]||[]).filter(e=>SIG[e.kind]>0).map(e=>e.id)).size;
+    if(!PROFILE.seeded.includes(t) && v>=.38 && pos>=2 && !PROFILE.insightKeys.includes('pos:'+t)) addInsight('disc:'+t, `New interest: ${tg.e} ${tg.l}. You ${evidenceText(t)}.`, 'discovered');
+    if(PROFILE.seeded.includes(t) && v<.32) addInsight('cool:'+t, `Cooling on ${tg.l}. You told me you liked it, but you've passed on it more than once.`, 'revised');
+    if(tg.parent){
+      const pv=P(tg.parent);
+      if(v<=-.12 && pv>=.3) addInsight('neg:'+t, t==='modern' ? `You're into architecture, but old buildings over glass towers.` : `You like ${TAGS[tg.parent].l.toLowerCase()}, just not ${tg.l.toLowerCase()}.`, 'nuance');
+      if(v>=.3 && pv>=.3 && pos>=2 && !PROFILE.insightKeys.includes('disc:'+t)) addInsight('pos:'+t, t==='italian'?`Within food, you keep choosing Italian.`: t==='chinese'?`Chinatown food is landing with you.`: t==='sweets'?`You have a sweet tooth.`:`Within ${TAGS[tg.parent].l.toLowerCase()}, you lean ${tg.l.toLowerCase()}.`, 'nuance');
+    }
+  }
+  if(PROFILE.threshold>=.57) addInsight('th:hi', `You prefer fewer interruptions, so I'm being pickier about what I mention.`, 'behavior');
+  if(PROFILE.threshold<=.43) addInsight('th:lo', `You're saying yes a lot, so I'll point out more places.`, 'behavior');
+}
+
+/* ======================================================================
+   PLANNING  (greedy itinerary over open, high-match places)
+   ====================================================================== */
+function buildPlan(){
+  const end = START_CLOCK + PROFILE.prefs.time;
+  let t=S.clock, at=S.pos.slice(); const out=[]; const used=new Set();
+  const cands = POIS.filter(p=>!['visited','skipped'].includes(S.poi[p.id]) && S.poi[p.id]!=='closed');
+  let food=false;
+  while(t<end && out.length<10){
+    let best=null;
+    for(const p of cands){
+      if(used.has(p.id)) continue;
+      const w=walkMin(at,p.ll), arr=t+w;
+      if(!isOpen(p,arr) || arr+Math.min(p.dwell,30)>p.close || arr>end) continue;
+      const sc=score(p,arr,{saved:true});
+      if(food!==false && (p.tags.food||0)>=.8 && arr-food<150) continue;   // don't stack meals
+      const v = sc.s - w*.02;
+      if(sc.s<.42) continue;
+      if(!best||v>best.v) best={p,v,w,arr,s:sc.s,contrib:sc.contrib};
+    }
+    if(!best) break;
+    used.add(best.p.id); out.push(best);
+    if((best.p.tags.food||0)>=.8) food=best.arr;
+    t = best.arr + best.p.dwell; at = best.p.ll;
+  }
+  return out;
+}
+let planLayer=null;
+function replan(reason){
+  const prev = S.plan.map(x=>x.p.id);
+  S.plan = buildPlan();
+  const now = S.plan.map(x=>x.p.id);
+  const added = now.filter(id=>!prev.includes(id)), dropped = prev.filter(id=>!now.includes(id) && !['visited'].includes(S.poi[id]));
+  S.newIds = S.prevPlanIds===null ? [] : added;
+  if(S.prevPlanIds!==null && (added.length||dropped.length)){
+    S.lastReplanNote = `<b>Replanned at ${fmt(S.clock)}</b> because you ${esc(reason)}.` +
+      (added.length?` Added ${added.map(i=>esc(POI[i].n)).join(', ')}.`:'') +
+      (dropped.length?` Dropped ${dropped.map(i=>esc(POI[i].n)).join(', ')}.`:'');
+    $('#plan-dot').classList.add('show');
+    pulse('plan');
+    trace('plan', `replan() → +[${added.map(i=>POI[i].n).join(', ')}] -[${dropped.map(i=>POI[i].n).join(', ')}]`);
+  }
+  S.prevPlanIds = now;
+  renderPlan(); drawPlanOnMap(); refreshPins();
+}
+function drawPlanOnMap(){
+  if(!map) return;
+  if(planLayer) planLayer.remove();
+  if(!S.plan.length) return;
+  planLayer = L.polyline([S.pos, ...S.plan.map(x=>x.p.ll)],{color:'#d97757',weight:3,opacity:.75,dashArray:'2 8',lineCap:'round'}).addTo(map);
+}
+
+/* ======================================================================
+   MAP + WALK SIMULATION
+   ====================================================================== */
+let map, meMarker, meCircle, trail, pins={};
+const SEGLEN = ROUTE.slice(1).map((p,i)=>dist(ROUTE[i],p));
+function initMap(){
+  if(map){ map.invalidateSize(); return; }
+  map = L.map('map',{zoomControl:false}).setView(ROUTE[0],17);
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri, HERE, Garmin, OpenStreetMap contributors'}).addTo(map);
+  L.polyline(ROUTE,{color:'#2f6fd6',weight:4,opacity:.18,dashArray:'1 7',lineCap:'round'}).addTo(map);
+  trail = L.polyline([ROUTE[0]],{color:'#2f6fd6',weight:4,opacity:.7}).addTo(map);
+  meCircle = L.circle(ROUTE[0],{radius:RADIUS,color:'#2f6fd6',weight:1,opacity:.35,fillOpacity:.06}).addTo(map);
+  meMarker = L.marker(ROUTE[0],{icon:L.divIcon({className:'',html:'<div class="me"></div>',iconSize:[18,18],iconAnchor:[9,9]}),zIndexOffset:1000}).addTo(map);
+  for(const p of POIS){
+    pins[p.id]=L.marker(p.ll,{icon:pinIcon(p)}).addTo(map).on('click',()=>openCard(p,'browse'));
+  }
+  map.on('dragstart',()=>{S.follow=false;});
+  setTimeout(()=>map.invalidateSize(),50);
+}
+function pinIcon(p){
+  const st = S.poi[p.id] || (S.plan.some(x=>x.p.id===p.id)?'planned':'');
+  return L.divIcon({className:'',html:`<div class="pin ${st}"><i>${p.e}</i></div>`,iconSize:[30,30],iconAnchor:[4,30]});
+}
+function refreshPins(){ if(!map) return; for(const p of POIS) pins[p.id].setIcon(pinIcon(p)); }
+
+let tickTimer=null, tickN=0;
+function tick(){
+  if(!S || !S.playing || S.active || S.finished) return;
+  let d = 20*S.speed*.1;  // metres per 100ms of real time
+  while(d>0 && S.seg<SEGLEN.length){
+    const rem=SEGLEN[S.seg]-S.segPos;
+    if(d<rem){ S.segPos+=d; S.walked+=d; S.clock+=d/PACE[PROFILE.prefs.pace]; d=0; }
+    else { d-=rem; S.walked+=rem; S.clock+=rem/PACE[PROFILE.prefs.pace]; S.seg++; S.segPos=0; }
+  }
+  if(S.seg>=SEGLEN.length){ S.pos=ROUTE[ROUTE.length-1].slice(); finishWalk(); }
+  else{ const a=ROUTE[S.seg],b=ROUTE[S.seg+1],f=S.segPos/SEGLEN[S.seg]; S.pos=[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f]; }
+  moveMe();
+  if(++tickN%5===0){ pulse('sense'); sense(); }
+}
+function moveMe(){
+  meMarker.setLatLng(S.pos); meCircle.setLatLng(S.pos); trail.addLatLng(S.pos);
+  if(S.follow) map.panTo(S.pos,{animate:false});
+  if(planLayer) planLayer.setLatLngs([S.pos, ...S.plan.map(x=>x.p.ll)]);
+  renderClock(); renderCtx();
+}
+function sense(){
+  const near = POIS.filter(p=>!S.poi[p.id] && dist(S.pos,p.ll)<RADIUS);
+  if(near.length) trace('sense', `nearby_places(r=${RADIUS}m) → [${near.map(p=>p.n).join(', ')}]`);
+  for(const p of near){
+    if(!isOpen(p,S.clock)){ S.poi[p.id]='closed'; trace('quiet', `skip ${p.n}: closed until ${fmt(p.open)}`); refreshPins(); continue; }
+    const sc=score(p); pulse('score');
+    const parts=sc.contrib.slice(0,3).map(c=>`${c.t} ${c.v.toFixed(2)}`).join(' + ');
+    trace('score', `score(${p.n}) = ${sc.s.toFixed(2)}  [${parts}${sc.fit?` | time ${sc.fit>0?'+':''}${sc.fit.toFixed(2)}`:''}${sc.sat?` | satiety ${sc.sat.toFixed(2)}`:''}${sc.ib?` | intent +${sc.ib.toFixed(2)}`:''}]`);
+    if(sc.s>=PROFILE.threshold){
+      S.poi[p.id]='notified'; S.stats.notified++;
+      trace('nudge', `notify(${p.n}) ✓ ${sc.s.toFixed(2)} ≥ θ ${PROFILE.threshold.toFixed(2)}`);
+      S.queue.push(p);
+    } else {
+      S.poi[p.id]='suppressed'; S.stats.suppressed++; S.quiet.unshift({p,s:sc.s});
+      trace('quiet', `stay_quiet(${p.n}) ${sc.s.toFixed(2)} < θ ${PROFILE.threshold.toFixed(2)}`);
+      renderQuiet();
+    }
+    refreshPins();
+  }
+  // ignored callout if user keeps walking (only matters when auto-pause is off)
+  if(S.active && S.active.mode==='auto' && dist(S.pos,S.active.p.ll)>RADIUS*1.8){ const p=S.active.p; closeCard(); learn(p,'ignored'); }
+  if(!S.active && S.queue.length) openCard(S.queue.shift(),'auto');
+}
+function setPlaying(on){
+  if(S.finished && on){ return; }
+  S.playing=on;
+  $('#c-play').textContent = on?'❚❚ Pause':'▶ Walk';
+  $('#live').classList.toggle('on',on);
+  renderCtx();
+}
+function finishWalk(){
+  S.finished=true; setPlaying(false);
+  $('#c-play').textContent='✓ Walk done';
+  say(`That's the end of the demo route. You walked ${(S.walked/1000).toFixed(1)} km. Your plan for the rest of the day is in the Plan tab.`);
+  trace('plan','walk_complete() → handing off to itinerary');
+}
+
+/* ======================================================================
+   CALLOUT CARD
+   ====================================================================== */
+async function openCard(p, mode){
+  if(S.active) closeCard(true);
+  S.active={p,mode}; S.wasPlaying = mode==='auto' ? S.playing : false;
+  const sc=score(p), d=Math.round(dist(S.pos,p.ll));
+  $('#sheet-tap-text').textContent = mode==='auto' ? `Tap on the shoulder · ${d} m away` : `You tapped a place · ${walkMin(S.pos,p.ll)} min walk`;
+  $('#sheet-tap .ring').style.display = mode==='auto'?'':'none';
+  $('#s-emo').textContent=p.e; $('#s-name').textContent=p.n;
+  $('#s-sub').textContent = `${p.area} · ${p.open===0&&p.close>=H(24)?'always open':isOpen(p,S.clock)?`open till ${fmt(p.close%1440)}`:`opens ${fmt(p.open)}`} · ~${p.dwell} min · ${p.price}`;
+  $('#s-match').textContent = Math.round(sc.s*100)+'%';
+  $('#s-match').style.color = sc.s>=PROFILE.threshold?'var(--green)':'var(--muted)';
+  const why = whyTags(p);
+  $('#s-why').innerHTML = why.map(t=>`<span class="${learnedTag(t)?'learned':''}">${TAGS[t].e} ${TAGS[t].l}${learnedTag(t)?' · learned':''}</span>`).join('') + (sc.fit>0?`<span>🕐 good time for it</span>`:'') + (sc.ib>0?`<span>🎯 ${INTENTS[S.intent].l}</span>`:'');
+  $('#s-callout').innerHTML = esc(templateCallout(p,why));
+  $('#s-main').style.display=''; $('#s-reasons').style.display='none';
+  $('#sheet').classList.add('show'); $('#askbar').classList.add('hide');
+  if(mode==='auto'){ setPlaying(false); pulse('nudge'); }
+  if(claudeOn()){
+    const myP=p;
+    const txt = await claudeCallout(p, why, d);
+    if(txt && S.active && S.active.p===myP) $('#s-callout').innerHTML = esc(txt)+'<span class="src">Claude</span>';
+  }
+}
+function templateCallout(p,why){
+  const learned = why.find(learnedTag);
+  let lead = learned ? `Since you ${evidenceText(learned)}, I think this one's for you. ` :
+    why.length ? `For the ${TAGS[why[0]].l.toLowerCase()}${why[1]?` and ${TAGS[why[1]].l.toLowerCase()}`:''} fan in you: ` : '';
+  return lead + p.b;
+}
+function closeCard(silent){
+  $('#sheet').classList.remove('show'); $('#askbar').classList.remove('hide');
+  const resume = S.active && S.wasPlaying;
+  S.active=null;
+  if(!silent){
+    if(S.queue.length){ const nx=S.queue.shift(); if(dist(S.pos,nx.ll)<RADIUS*2) setTimeout(()=>openCard(nx,'auto'),450); else trace('quiet',`drop stale callout ${nx.n}`); }
+    else if(resume) setTimeout(()=>setPlaying(true),600);
+  }
+  refreshPins();
+}
+function respond(kind){
+  const p=S.active.p;
+  trace('user', `user → ${({visit:'"I\'m going in"',save:'"Save for later"',taste:'"Not my thing"',timing:'"Not right now"',been:'"Been there"'})[kind]}`);
+  if(kind==='visit'){
+    S.poi[p.id]='visited'; S.stats.accepted++; S.stats.visited++;
+    S.done.push({p,at:S.clock}); S.clock+=p.dwell;
+    if((p.tags.food||0)>=.8){ S.lastMeal=S.clock; trace('sense',`satiety: just ate at ${p.n}, food places fade for ~2h`); }
+    if(S.intent && Object.keys(INTENTS[S.intent].tags).some(t=>(p.tags[t]||0)>=.5)){ trace('learn',`intent "${S.intent}" satisfied → clear`); setIntent(null); }
+    say(`Enjoy ${p.n}. I'll skip ahead ${p.dwell} minutes and pick up when you're back on the move.`);
+  }
+  if(kind==='save'){ S.poi[p.id]='saved'; S.stats.accepted++; say(`Saved. I'll fit ${p.n} into your plan.`); }
+  if(kind==='taste'){ S.poi[p.id]='skipped'; }
+  if(kind==='timing'){ S.poi[p.id]='saved'; say(`No problem, I'll keep it in mind for later.`); }
+  if(kind==='been'){ S.poi[p.id]='skipped'; say(`Nice. I'll take that as a sign you like places like this.`); }
+  closeCard();
+  learn(p,kind);
+  renderClock();
+}
+
+/* ======================================================================
+   ASK WANDER  (short-term intent + optional Claude answer)
+   ====================================================================== */
+function detectIntent(q){
+  q=q.toLowerCase();
+  if(/hungr|eat|lunch|dinner|food|snack|bite/.test(q)) return 'hungry';
+  if(/coffee|espresso|caffe|latte|tired of walking/.test(q)) return 'coffee';
+  if(/sit|rest|break|tired|bench|relax/.test(q)) return 'rest';
+  if(/drink|beer|wine|cocktail|bar\b|bars/.test(q)) return 'drinks';
+  if(/surprise|random|hidden|weird|secret|unusual/.test(q)) return 'surprise';
+  return null;
+}
+function setIntent(k){
+  S.intent=k;
+  $('#intent-chip').classList.toggle('show',!!k);
+  if(k) $('#intent-label').textContent = INTENTS[k].l;
+  renderCtx();
+}
+function nearbyRanked(maxMin=12){
+  return POIS.filter(p=>!['visited','skipped'].includes(S.poi[p.id]) && isOpen(p,S.clock) && walkMin(S.pos,p.ll)<=maxMin)
+    .map(p=>({p,s:score(p).s,w:walkMin(S.pos,p.ll)})).sort((a,b)=>(b.s-b.w*.01)-(a.s-a.w*.01));
+}
+async function ask(q){
+  if(!q.trim()) return;
+  trace('user',`user → "${q}"`);
+  const k=detectIntent(q);
+  if(k){ setIntent(k); trace('sense',`set_intent("${k}") short-term, decays after use`); }
+  const ranked=nearbyRanked().slice(0,5);
+  trace('score',`rank_nearby(≤12 min walk) → ${ranked.slice(0,3).map(r=>`${r.p.n} ${r.s.toFixed(2)}`).join(', ')}`);
+  const top=ranked[0];
+  let ans = top ? `Try ${top.p.n}, ${top.w} min away (${Math.round(top.s*100)}% match). ${top.p.b}` : `Nothing open nearby fits right now. Keep walking and I'll tap you.`;
+  say(claudeOn()?'Thinking…':ans, !claudeOn());
+  if(claudeOn()){
+    const txt = await claudeAsk(q, ranked);
+    say(txt || ans);
+  }
+  if(top){ pins[top.p.id].setIcon(L.divIcon({className:'',html:`<div class="pin notified"><i>${top.p.e}</i></div>`,iconSize:[30,30],iconAnchor:[4,30]})); }
+  replan(`asked "${q}"`);
+}
+
+/* ======================================================================
+   CLAUDE  (optional: Anthropic TypeScript SDK loaded as an ES module)
+   ====================================================================== */
+let API = JSON.parse(localStorage.getItem(LS_API)||'{}'); let client=null;
+const claudeOn = ()=>!!API.key;
+async function getClient(){
+  if(client) return client;
+  const {default: Anthropic} = await import('https://esm.sh/@anthropic-ai/sdk');
+  client = new Anthropic({apiKey:API.key, dangerouslyAllowBrowser:true});
+  return client;
+}
+async function claude(system, user, label){
+  try{
+    const c=await getClient(); const t0=performance.now();
+    const model = API.model||'claude-opus-5-5';
+    const req = {model, max_tokens:2000, output_config:{effort:'low'}, system, messages:[{role:'user',content:user}]};
+    let r;
+    if(model==='claude-haiku-5-5') r = await c.messages.create(req);
+    else r = await c.beta.messages.create({...req, betas:['server-side-fallback-2026-07-01'], fallbacks:'default'});
+    trace('claude',`claude.messages.create(${label}, ${model}) ${Math.round(performance.now()-t0)}ms`);
+    if(r.stop_reason==='refusal') return null;
+    return r.content.filter(b=>b.type==='text').map(b=>b.text).join('').trim().replace(/\u2014/g,', ');
+  }catch(e){ trace('claude',`claude error: ${e.message||e}`); return null; }
+}
+function profileBrief(){
+  const sorted=Object.keys(TAGS).map(t=>[t,P(t)]).sort((a,b)=>b[1]-a[1]);
+  return {likes:sorted.filter(x=>x[1]>=.3).map(x=>TAGS[x[0]].l), dislikes:sorted.filter(x=>x[1]<0).map(x=>TAGS[x[0]].l),
+    told_me:PROFILE.seeded.map(t=>TAGS[t].l), notes:PROFILE.insights.slice(0,5).map(i=>i.text),
+    recent:PROFILE.history.slice(-6).map(h=>`${VERB[h.kind]} ${POI[h.id].n}`)};
+}
+const SYS = `You are Wander, a walking companion that helps a traveler explore a city. You know their taste from what they told you and from what they did on this walk. Write like a well-read local friend: warm, specific, brief. Plain text only. No emojis, no em dashes, no preamble.`;
+function claudeCallout(p,why,d){
+  return claude(SYS, `The traveler is ${d} m from this place right now. Write the tap-on-the-shoulder callout: at most 2 sentences, under 45 words. Tie it to what you know about them, and give one concrete thing to do or look for there.\n\n<place>${JSON.stringify({name:p.n,area:p.area,facts:p.b,closes:fmt(p.close%1440),why_it_matches:why.map(t=>TAGS[t].l)})}</place>\n<traveler>${JSON.stringify(profileBrief())}</traveler>\n<time>${fmt(S.clock)}</time>`, `callout:${p.id}`);
+}
+function claudeAsk(q,ranked){
+  return claude(SYS, `The traveler asked: "${q}". Answer in at most 3 short sentences. Recommend only from the candidates, mention walking minutes, and say why it suits them.\n\n<candidates>${JSON.stringify(ranked.map(r=>({name:r.p.n,walk_min:r.w,match:Math.round(r.s*100),facts:r.p.b,closes:fmt(r.p.close%1440)})))}</candidates>\n<traveler>${JSON.stringify(profileBrief())}</traveler>\n<time>${fmt(S.clock)}</time>`, 'ask');
+}
+async function reflect(){
+  pulse('learn');
+  trace('learn','reflect() → summarize evidence into memory');
+  if(!claudeOn()){
+    const top=Object.keys(TAGS).map(t=>[t,P(t)]).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>TAGS[x[0]].l.toLowerCase());
+    const low=Object.keys(TAGS).filter(t=>P(t)<0).map(t=>TAGS[t].l.toLowerCase());
+    PROFILE.insights.unshift({text:`So far: strongest pull toward ${top.join(', ')}.${low.length?` Steering away from ${low.join(', ')}.`:''} Add a Claude key for richer reflections.`,src:'reflection',at:S.clock});
+    saveProfile(); renderInsights(); return;
+  }
+  const txt = await claude(SYS, `Reflect on this traveler. Write exactly 3 lines. Lines 1 and 2: one observation each about their taste, under 18 words, grounded in the evidence. Line 3 starts with "Next I'd suggest:" and names one kind of place to try.\n\n<traveler>${JSON.stringify(profileBrief())}</traveler>\n<full_history>${JSON.stringify(PROFILE.history.map(h=>({place:POI[h.id].n,signal:h.kind})))}</full_history>`, 'reflect');
+  if(txt){ txt.split('\n').filter(Boolean).reverse().forEach(l=>PROFILE.insights.unshift({text:l.replace(/^[-*\d.\s]+/,''),src:'Claude reflection',at:S.clock,claude:true})); saveProfile(); renderInsights(); renderYou(); }
+}
+
+/* ======================================================================
+   RENDERING
+   ====================================================================== */
+function pulse(step){ const el=$(`.loop .step[data-s="${step}"]`); if(!el) return; el.classList.add('on'); clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('on'),650); }
+function trace(kind,text){
+  const el=$('#trace'); const ln=document.createElement('div'); ln.className='ln';
+  ln.innerHTML=`<span class="t">${S?fmtShort(S.clock):''}</span><span class="k-${kind}">${kind==='user'?'◂':'▸'} ${esc(text)}</span>`;
+  el.prepend(ln); while(el.children.length>120) el.lastChild.remove();
+}
+let bubbleT;
+function say(text,auto=true){ $('#bubble-text').textContent=text; $('#bubble').classList.add('show'); clearTimeout(bubbleT); if(auto) bubbleT=setTimeout(()=>$('#bubble').classList.remove('show'),7000); }
+function renderClock(){ $('#sb-time').textContent=fmt(S.clock).replace(/ (AM|PM)/,''); $('#area').textContent = nearestArea()+' · '+fmt(S.clock); }
+function nearestArea(){ let best=POIS[0],bd=1e9; for(const p of POIS){const d=dist(S.pos,p.ll); if(d<bd){bd=d;best=p;}} return best.area; }
+function renderCtx(){
+  if(!S) return;
+  $('#ctx').innerHTML = `<span>Location</span><span>${S.pos[0].toFixed(5)}, ${S.pos[1].toFixed(5)} · ${esc(nearestArea())}</span>
+  <span>Time</span><span>${fmt(S.clock)} · ${(S.walked/1000).toFixed(2)} km walked</span>
+  <span>Status</span><span>${S.finished?'walk complete':S.active?'waiting on you':S.playing?'walking':'paused'}</span>
+  <span>Intent</span><span>${S.intent?INTENTS[S.intent].l+' (short-term)':'none'}</span>
+  <span>Trip</span><span>#${PROFILE.trips} · ${S.stats.notified} taps · ${S.stats.accepted} accepted · ${S.stats.suppressed} held back</span>`;
+  $('#theta-v').textContent=PROFILE.threshold.toFixed(2);
+  $('#theta-mk').style.left = ((PROFILE.threshold-.3)/.42*100)+'%';
+  $('#ctx-claude').textContent = claudeOn()?`Claude: ${API.model||'claude-opus-5-5'}`:'templates mode';
+}
+function renderTaste(deltas=[]){
+  const rows = Object.keys(TAGS).map(t=>({t,v:P(t)})).sort((a,b)=>b.v-a.v);
+  const dm = Object.fromEntries(deltas.map(x=>[x.t,x.d]));
+  $('#taste').innerHTML = rows.map(({t,v})=>{
+    const cls = PROFILE.seeded.includes(t)?'seed':(v>=.3||v<0)&&PROFILE.n[t]?'learned':'';
+    const z=33.333, w=Math.abs(v)*(v>=0?66.666:33.333);
+    const left = v>=0?z:z-w;
+    const col = v<0?'#c0503a':cls==='seed'?'#d97757':cls==='learned'?'#a98bf0':'#6b665e';
+    const d = dm[t]?`<span class="delta" style="color:${dm[t]>0?'#98d4a8':'#f08a7a'}">${dm[t]>0?'+':''}${dm[t].toFixed(2)}</span>`:'';
+    return `<div class="trow"><div class="lab"><span class="mk ${cls}"></span>${TAGS[t].e} ${TAGS[t].l}</div><div class="bar"><div class="zero"></div><div class="fill" style="left:${left}%;width:${w}%;background:${col}"></div></div><div class="val">${d}${v>=0?' ':''}${v.toFixed(2)}</div></div>`;
+  }).join('');
+}
+function renderInsights(){
+  const html = PROFILE.insights.map(i=>`<div class="binsight ${i.claude?'claude':''}">${esc(i.text)}<small>${esc(i.src)} · ${fmt(i.at)}</small></div>`).join('');
+  $('#insights').innerHTML = html || `<div style="color:var(--brain-muted);font-size:12px">Nothing yet. I'll write down what I notice about you here.</div>`;
+}
+function renderQuiet(){
+  $('#quiet-n').textContent = `${S.quiet.length} place${S.quiet.length===1?'':'s'}`;
+  $('#quiet').innerHTML = S.quiet.length ? S.quiet.map(q=>`<span>${q.p.e} <b>${esc(q.p.n)}</b> ${Math.round(q.s*100)}%</span>`).join('') : `<span>Places I pass but don't think you'd care about show up here.</span>`;
+}
+function renderPlan(){
+  const end = START_CLOCK + PROFILE.prefs.time;
+  let h = `<div class="h2">Your ${PROFILE.prefs.time>=420?'afternoon & evening':PROFILE.prefs.time>=240?'afternoon':'next two hours'}</div>
+  <div class="subtle">Built from your taste model, opening hours and walking time. It rewrites itself as I learn. Ends around ${fmt(end)}.</div>`;
+  if(S.lastReplanNote) h+=`<div class="replan">${S.lastReplanNote}</div>`;
+  h+=`<div class="tl"><div class="tl-now"><div class="tl-time">${fmtShort(S.clock)}</div><div>● You are here · ${esc(nearestArea())}</div></div>`;
+  if(!S.plan.length) h+=`<div class="empty">Nothing left that fits today. Walk a bit and I'll find more.</div>`;
+  S.plan.forEach((x,i)=>{
+    h+=`<div class="tl-walk">🚶 ${x.w} min walk</div>`;
+    const isNew=S.newIds?.includes(x.p.id), saved=S.poi[x.p.id]==='saved', meal=(x.p.tags.food||0)>=.8 && x.p.dwell>=45;
+    const tags=x.contrib.filter(c=>c.v>.05).slice(0,3).map(c=>`<span>${TAGS[c.t].e} ${TAGS[c.t].l}</span>`).join('');
+    h+=`<div class="tl-item"><div class="tl-time">${fmtShort(x.arr)}</div><div class="tl-card ${isNew?'new':''}">
+      <div class="nm">${x.p.e} ${esc(x.p.n)} ${isNew?'<span class="badge new">new</span>':''}${saved?'<span class="badge saved">saved</span>':''}${meal?'<span class="badge meal">meal</span>':''}</div>
+      <div class="meta">${Math.round(x.s*100)}% match · ~${x.p.dwell} min · ${x.p.price} · ${esc(x.p.area)}</div><div class="tags">${tags}</div></div></div>`;
+  });
+  h+=`</div>`;
+  if(S.done.length) h+=`<div class="done"><div class="sect">Already today</div>${S.done.map(d=>`<div class="row"><span>${fmtShort(d.at)}</span>${d.p.e} ${esc(d.p.n)}</div>`).join('')}</div>`;
+  $('#plan-body').innerHTML=h;
+}
+function renderYou(){
+  const rows=Object.keys(TAGS).map(t=>({t,v:P(t)})).sort((a,b)=>b.v-a.v);
+  const chip=(r,cls='')=>`<span class="tchip ${cls}">${TAGS[r.t].e} ${TAGS[r.t].l}<em>${Math.round(r.v*100)}</em></span>`;
+  const loves=rows.filter(r=>r.v>=.4), curious=rows.filter(r=>r.v>=.2&&r.v<.4), nope=rows.filter(r=>r.v<0);
+  const acc = S.stats.notified?Math.round(S.stats.accepted/S.stats.notified*100):0;
+  $('#you-body').innerHTML = `<div class="h2">What I know about you</div>
+  <div class="subtle">Trip #${PROFILE.trips}. This lives on your device and carries over to your next city.</div>
+  <div class="stats"><div class="stat"><b>${(S.walked/1000).toFixed(1)}</b><small>KM</small></div><div class="stat"><b>${S.stats.visited}</b><small>VISITED</small></div><div class="stat"><b>${acc}%</b><small>TAPS LIKED</small></div><div class="stat"><b>${S.stats.suppressed}</b><small>HELD BACK</small></div></div>
+  <div class="sect">You love</div><div class="tchips">${loves.map(r=>chip(r,learnedTag(r.t)?'learned':'')).join('')||'<span class="subtle">Still learning</span>'}</div>
+  <div class="sect">Curious about</div><div class="tchips">${curious.map(r=>chip(r)).join('')||'<span class="subtle">Nothing yet</span>'}</div>
+  ${nope.length?`<div class="sect">Not your thing</div><div class="tchips">${nope.map(r=>chip(r,'neg')).join('')}</div>`:''}
+  <div class="sect">My notes on you</div>${PROFILE.insights.slice(0,6).map(i=>`<div class="ins">${esc(i.text)}<small>${esc(i.src)}</small></div>`).join('')||'<div class="subtle">I\'ll write notes here as I learn.</div>'}
+  <div class="btnrow"><button id="y-edit">Edit starting picks</button><button id="y-forget">Forget everything</button></div>`;
+  $('#y-edit').onclick=()=>{ showOnboarding(true); };
+  $('#y-forget').onclick=()=>{ if(confirm('Erase everything Wander has learned about you?')){ localStorage.removeItem(LS_KEY); location.reload(); } };
+}
+function showView(v){
+  $$('.view').forEach(x=>x.classList.remove('active')); $('#v-'+v).classList.add('active');
+  $$('.tab').forEach(t=>t.classList.toggle('active',t.dataset.v===v));
+  if(v==='plan'){ $('#plan-dot').classList.remove('show'); renderPlan(); }
+  if(v==='you'){ $('#you-dot').classList.remove('show'); renderYou(); }
+  if(v==='explore' && map) setTimeout(()=>map.invalidateSize(),20);
+}
+
+/* ======================================================================
+   ONBOARDING
+   ====================================================================== */
+const picks = new Set();
+function showOnboarding(editing=false){
+  showView('onb'); $('#tabbar').classList.add('hidden');
+  const saved=loadProfile();
+  if(saved && !editing){
+    const loves=Object.keys(TAGS).filter(t=>saved.seeded.includes(t)&&(saved.P[t]||0)>=.4).map(t=>TAGS[t].l.toLowerCase());
+    const learned=Object.keys(TAGS).filter(t=>!saved.seeded.includes(t)&&(saved.P[t]||0)>=.33).map(t=>TAGS[t].l.toLowerCase());
+    $('#onb-memory').innerHTML = `I remember you from ${saved.trips} trip${saved.trips===1?'':'s'}. You love <b>${esc(loves.join(', ')||'a bit of everything')}</b>.` +
+      (learned.length?` On the way I also learned you're into <b>${esc(learned.join(', '))}</b>, which you never told me.`:'') +
+      (saved.insights[0]?`<br><br>My last note: "${esc(saved.insights[0].text)}"`:'');
+    $('#onb-return').style.display=''; $('#onb-new').style.display='none';
+  } else {
+    $('#onb-return').style.display='none'; $('#onb-new').style.display='';
+    if(editing && PROFILE){ picks.clear(); INTERESTS.forEach(i=>{ if(i.tags.every(t=>PROFILE.seeded.includes(t))) picks.add(i.id); }); renderPicks(); }
+  }
+}
+function renderPicks(){
+  $('#interest-chips').innerHTML = INTERESTS.map(i=>`<button class="chip ${picks.has(i.id)?'on':''}" data-i="${i.id}">${i.l}</button>`).join('');
+  $('#pick-count').textContent = picks.size?`${picks.size} picked`:'pick 2+';
+  $('#btn-start').disabled = picks.size<2;
+}
+function readSeg(name){ return $(`.seg[data-pref="${name}"] button.on`).dataset.v; }
+function startFromPicks(){
+  const prev = PROFILE;
+  PROFILE = blankProfile();
+  if(prev){ PROFILE.trips=prev.trips; } // keep trip count when editing picks
+  const seeds = INTERESTS.filter(i=>picks.has(i.id)).flatMap(i=>i.tags);
+  for(const t of Object.keys(TAGS)) PROFILE.P[t] = seeds.includes(t)?.6:(TAGS[t].parent?0:.1);
+  PROFILE.seeded = seeds;
+  PROFILE.prefs = {pace:readSeg('pace'), time:+readSeg('time'), chat:+readSeg('chat')};
+  PROFILE.threshold = PROFILE.prefs.chat;
+  begin();
+}
+function begin(){
+  PROFILE.trips++; saveProfile();
+  S = newSession();
+  $('#tabbar').classList.remove('hidden'); showView('explore'); initMap();
+  // reset map layers for a fresh walk
+  trail.setLatLngs([ROUTE[0]]); meMarker.setLatLng(ROUTE[0]); meCircle.setLatLng(ROUTE[0]); map.setView(ROUTE[0],17);
+  $('#trace').innerHTML=''; $('#c-play').textContent='▶ Walk';
+  trace('sense',`load_memory() → ${PROFILE.seeded.length} seeded interests, ${PROFILE.history.length} past signals, ${PROFILE.insights.length} notes`);
+  trace('sense',`start_session(city="San Francisco", start=Ferry Building, budget=${PROFILE.prefs.time} min, pace=${PROFILE.prefs.pace})`);
+  renderTaste(); renderInsights(); renderQuiet(); renderClock(); renderCtx(); setIntent(null);
+  replan('started');
+  say(PROFILE.trips>1 ? `Welcome back to the city. I've already planned around what I learned last time. Press ▶ Walk to start.` : `I'm Wander. Start walking (▶ Walk in the demo panel) and I'll tap you when we pass something you'd love.`);
+}
+
+/* ======================================================================
+   WIRING
+   ====================================================================== */
+renderPicks();
+$('#interest-chips').addEventListener('click',e=>{ const b=e.target.closest('.chip'); if(!b) return; const id=b.dataset.i; picks.has(id)?picks.delete(id):picks.add(id); renderPicks(); });
+$$('.seg').forEach(seg=>seg.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); }));
+$('#btn-start').onclick=startFromPicks;
+$('#btn-continue').onclick=()=>{ PROFILE=loadProfile(); begin(); };
+$('#btn-fresh').onclick=()=>{ localStorage.removeItem(LS_KEY); PROFILE=null; $('#onb-return').style.display='none'; $('#onb-new').style.display=''; };
+$$('.tab').forEach(t=>t.onclick=()=>showView(t.dataset.v));
+$('#a-go').onclick=()=>respond('visit');
+$('#a-save').onclick=()=>respond('save');
+$('#a-skip').onclick=()=>{ $('#s-main').style.display='none'; $('#s-reasons').style.display='block'; };
+$('#s-reasons').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) respond(b.dataset.r); });
+$('#intent-x').onclick=()=>{ setIntent(null); replan('cleared your intent'); };
+$('#recenter').onclick=()=>{ S.follow=true; map.panTo(S.pos); };
+$('.intents').addEventListener('click',e=>{ const b=e.target.closest('button'); if(b) ask(b.dataset.q); });
+$('#ask').onsubmit=e=>{ e.preventDefault(); const q=$('#ask-in').value; $('#ask-in').value=''; ask(q); };
+$('#c-play').onclick=()=>{ if(!S) return; if(S.active){ say('Answer the card first, or tap Not for me.'); return; } setPlaying(!S.playing); };
+$('#c-speed').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b||!S) return; $$('#c-speed button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); S.speed=+b.dataset.x; });
+$('#c-linger').onclick=()=>{
+  if(!S) return;
+  const near=POIS.filter(p=>dist(S.pos,p.ll)<RADIUS*1.5 && !['visited','skipped'].includes(S.poi[p.id])).sort((a,b)=>dist(S.pos,a.ll)-dist(S.pos,b.ll))[0];
+  S.clock+=10; renderClock();
+  trace('sense',`observe: stationary 10 min${near?` near ${near.n}`:''} (implicit signal)`);
+  if(near){ if(S.active?.p===near) closeCard(true); S.poi[near.id]='visited'; S.stats.visited++; S.done.push({p:near,at:S.clock-10}); learn(near,'dwell'); say(`You lingered at ${near.n}. Noted.`); }
+  else say('You paused, but nothing I know of is nearby.');
+};
+$('#c-reset').onclick=()=>{ if(!PROFILE) return; PROFILE.trips--; begin(); };
+$('#c-reflect').onclick=reflect;
+$('#c-settings').onclick=()=>{ $('#settings').classList.toggle('show'); $('#c-settings').classList.toggle('on'); };
+$('#api-key').value=API.key||''; $('#api-model').value=API.model||'claude-opus-5-5';
+$('#api-save').onclick=()=>{ API={key:$('#api-key').value.trim(), model:$('#api-model').value}; localStorage.setItem(LS_API,JSON.stringify(API)); client=null; $('#settings').classList.remove('show'); $('#c-settings').classList.remove('on'); if(S) renderCtx(); };
+document.addEventListener('keydown',e=>{ if(e.code==='Space' && e.target.tagName!=='INPUT' && S){ e.preventDefault(); $('#c-play').click(); } });
+tickTimer=setInterval(tick,100);
+showOnboarding();
+</script>
+</body>
+</html>

@@ -10,6 +10,7 @@ around the clock, and has a body: a small round touchscreen badge that shows wha
 |---|---|
 | `issues/`, `runbooks/`, `deploys/`, `contracts/`, `compliance-policy.md` | The synthetic enterprise Jensen works on, from the hackathon's starter repo ([rosscrooke/always-on-agent](https://github.com/rosscrooke/always-on-agent)) |
 | `badge/` | Rust firmware for Jensen's badge, the Waveshare ESP32-S3-Touch-AMOLED-1.75C: eyes, touch, text, sound, Wi-Fi, Bluetooth. Brought in with its history from [Kradllit/basecamp-badge](https://github.com/Kradllit/basecamp-badge); see `badge/README.md` |
+| `wander/` | Wander, a prototype city-exploration agent: learns your taste as you walk, taps you about nearby places, and replans your itinerary. Open `wander/index.html`; see `wander/README.md` |
 
 All data in the enterprise folders is fictional.
 
