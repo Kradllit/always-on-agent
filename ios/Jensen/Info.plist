@@ -31,6 +31,10 @@
 	<string>Jensen talks to its server when that runs on a computer on this network.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jensen looks for interesting places around where you are.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hold the mic to ask Jensen something out loud.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Jensen turns what you say into text, on this iPhone where it can, to answer your question.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

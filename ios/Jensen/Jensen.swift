@@ -12,6 +12,8 @@ struct Message: Identifiable {
     var place: Place?
     /// Whether the badge took it.
     var onBadge = false
+    /// What Jensen did for a question (a booking request, tickets, a calendar entry), with links.
+    var actions: [Answer.Action] = []
 }
 
 /// How often Jensen speaks up, and how far it looks.
@@ -84,6 +86,7 @@ final class Jensen: ObservableObject {
     private let badge: BadgeLink
     private let finder: PlaceFinder
     private let brain: BrainLink
+    private let listener: Listener
     /// How much faster than life time runs (a demo walk at 5x or 20x): the waits between
     /// places shrink by as much, so a fast walk passes as many places as a slow one.
     var timeScale = 1.0
@@ -106,7 +109,8 @@ final class Jensen: ObservableObject {
 
     private static let saved = "profile"
 
-    init(badge: BadgeLink, finder: PlaceFinder, brain: BrainLink) {
+    init(badge: BadgeLink, finder: PlaceFinder, brain: BrainLink, listener: Listener) {
+        self.listener = listener
         self.badge = badge
         self.finder = finder
         self.brain = brain
@@ -139,6 +143,7 @@ final class Jensen: ObservableObject {
         profile.pace = chat >= 0.6 ? .few : .lots
         save()
         stage = .location
+        introduce()
         say("Hi, I'm Jensen. I'll look for \(Self.list(profile.interests)) while you walk, and tap you on the badge when something fits.")
         if finder.allowed {
             explore(announce: true)
@@ -150,8 +155,8 @@ final class Jensen: ObservableObject {
     /// What can be tapped instead of typed, at this point of the chat.
     var picks: [String] {
         switch stage {
-        case .interests: ["Coffee", "Food", "Art", "Books", "Parks", "Music", "History", "Architecture", "Shops", "Bars"]
-        case .pace: Pace.allCases.map(\.label)
+        case .interests: []  // the onboarding screen has its own chips
+        case .pace: []
         case .location: ["Share my location", "Not now"]
         case .exploring: [paused ? "Resume" : "Pause"]
         }
@@ -170,51 +175,53 @@ final class Jensen: ObservableObject {
     var picksAddUp: Bool { stage == .interests }
 
     /// The person said something.
+    /// The person typed something or tapped a pick. Interests come only from the
+    /// onboarding screen: whatever is typed is a message for Jensen's brain (POST /ask),
+    /// except the picks for the location question and pause or resume.
     func hear(_ text: String) {
         let said = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !said.isEmpty else { return }
-        messages.append(Message(from: .you, text: said))
         let lower = said.lowercased()
-        switch stage {
-        case .interests:
-            let interests = Self.interests(in: said)
-            guard !interests.isEmpty else {
-                say("Name a few things you like: coffee, bookshops, old buildings, anything.")
-                return
-            }
-            profile.interests = interests
-            stage = .pace
-            say("\(Self.list(interests).capitalizedFirst). Noted. And how do you like to explore?")
-        case .pace:
-            profile.pace = Pace.from(said)
-            save()
-            stage = .location
-            say("\(profile.pace.reply) Last thing: to look around you I need to know where you are. I use your location only to search Apple Maps near you.")
-            if finder.allowed { explore(announce: true) }
-        case .location:
-            if lower.hasPrefix("not") || lower.hasPrefix("no") || lower.contains("later") {
-                say("No problem. Say the word when you're ready.")
-            } else {
-                askForLocation()
-            }
-        case .exploring:
-            if lower == "pause" || lower == "stop" {
-                paused = true
-                say("Paused. Say resume when you want me back.")
-            } else if lower == "resume" || lower == "go" || lower == "continue" {
-                paused = false
-                say("Back on.")
-                look()
-            } else {
-                let more = Self.interests(in: said).filter { !profile.interests.contains($0) }
-                guard !more.isEmpty else { return }
-                profile.interests += more
-                save()
-                saidNothingNearby = false
-                say("Added \(Self.list(more)). I'll look for that too.")
-                look()
-            }
+        if stage == .location, lower == "share my location" {
+            messages.append(Message(from: .you, text: said))
+            askForLocation()
+        } else if stage == .location, lower == "not now" {
+            messages.append(Message(from: .you, text: said))
+            say("No problem. Tap Share my location when you're ready, or start the Demo walk.")
+        } else if stage == .exploring, lower == "pause" {
+            messages.append(Message(from: .you, text: said))
+            paused = true
+            say("Paused. Tap Resume when you want me back.")
+        } else if stage == .exploring, lower == "resume" {
+            messages.append(Message(from: .you, text: said))
+            paused = false
+            say("Back on.")
+        } else {
+            Task { await ask(said) }
         }
+    }
+
+    /// A question about the place on the badge or what's around, typed or spoken (POST /ask).
+    /// The brain doesn't know where the walker is, so the question carries it, with the
+    /// places nearby. The answer goes to the chat, out loud, and to the badge.
+    @Published private(set) var thinking = false
+
+    func ask(_ question: String) async {
+        messages.append(Message(from: .you, text: question))
+        thinking = true
+        defer { thinking = false }
+        // The brain looks around the walker itself (places_near_me): make sure it knows where they are.
+        if let here = finder.location { brain.report(here) }
+        let text = question
+        guard let answer = await brain.ask(text) else {
+            say("I couldn't reach my brain just now. Try again in a moment.")
+            return
+        }
+        var reply = Message(from: .jensen, text: answer.reply)
+        reply.actions = (answer.actions ?? []).filter { $0.url != nil }
+        reply.onBadge = badge.pick(headline: "Jensen", why: Self.short(answer.reply))
+        messages.append(reply)
+        listener.speak(answer.reply)
     }
 
     /// Forget the interview and begin again.
@@ -417,6 +424,16 @@ final class Jensen: ObservableObject {
         guard var words = category?.replacingOccurrences(of: "_", with: " "), !words.isEmpty else { return "Place" }
         if words.count > 48 { words = String(words.prefix(46)).trimmingCharacters(in: .whitespaces) + "..." }
         return words.prefix(1).uppercased() + words.dropFirst()
+    }
+
+    /// The first sentence or two of a reply, up to about 120 characters, for the badge.
+    private static func short(_ reply: String) -> String {
+        var out = ""
+        reply.enumerateSubstrings(in: reply.startIndex..., options: .bySentences) { sentence, _, _, stop in
+            guard let sentence = sentence?.trimmingCharacters(in: .whitespaces) else { return }
+            if out.isEmpty || out.count + sentence.count < 120 { out += (out.isEmpty ? "" : " ") + sentence } else { stop = true }
+        }
+        return out.count > 140 ? String(out.prefix(137)) + "..." : out
     }
 
     /// Tell the brain who is walking (POST /profile).

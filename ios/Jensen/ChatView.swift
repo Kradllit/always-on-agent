@@ -6,6 +6,7 @@ struct ChatView: View {
     @EnvironmentObject private var badge: BadgeLink
     @EnvironmentObject private var brain: BrainLink
     @EnvironmentObject private var walk: DemoWalk
+    @EnvironmentObject private var listener: Listener
     @State private var draft = ""
     @State private var showingWalk = false
     @State private var showingBadge = false
@@ -25,6 +26,20 @@ struct ChatView: View {
                         ForEach(jensen.messages) { message in
                             MessageRow(message: message).id(message.id)
                         }
+                        if jensen.thinking {
+                            HStack {
+                                Image(systemName: "ellipsis")
+                                    .font(.title2.weight(.bold))
+                                    .symbolEffect(.variableColor.iterative, options: .repeating)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                    .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+                                    .accessibilityLabel("Jensen is typing")
+                                Spacer()
+                            }
+                            .id("thinking")
+                        }
                         if jensen.looking {
                             HStack(spacing: 8) {
                                 ProgressView()
@@ -38,6 +53,9 @@ struct ChatView: View {
                     .padding(.vertical, 12)
                 }
                 .scrollDismissesKeyboard(.interactively)
+                .onChange(of: jensen.thinking) {
+                    if jensen.thinking { withAnimation(.smooth) { proxy.scrollTo("thinking", anchor: .bottom) } }
+                }
                 .onChange(of: jensen.messages.count) {
                     guard let last = jensen.messages.last else { return }
                     withAnimation(.smooth) { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -158,7 +176,15 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
             }
             .scrollIndicators(.hidden)
+            if listener.listening || listener.problem != nil {
+                Text(listener.listening ? (listener.heard.isEmpty ? "Listening..." : listener.heard) : (listener.problem ?? ""))
+                    .font(.callout)
+                    .foregroundStyle(listener.listening ? Color.primary : Color.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+            }
             HStack(spacing: 10) {
+                TalkButton()
                 TextField("Message", text: $draft, axis: .vertical)
                     .lineLimit(1...4)
                     .focused($typing)
@@ -205,6 +231,39 @@ struct ChatView: View {
     }
 }
 
+/// Hold to talk: the question is heard while the button is down and sent when it comes up.
+private struct TalkButton: View {
+    @EnvironmentObject private var jensen: Jensen
+    @EnvironmentObject private var listener: Listener
+    @State private var down = false
+
+    var body: some View {
+        Image(systemName: listener.listening ? "mic.circle.fill" : "mic.circle")
+            .font(.system(size: 32))
+            .foregroundStyle(listener.listening ? Color.red : Color.accentColor)
+            .scaleEffect(listener.listening ? 1.15 : 1)
+            .animation(.snappy, value: listener.listening)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        guard !down else { return }
+                        down = true
+                        Task { await listener.start() }
+                    }
+                    .onEnded { _ in
+                        down = false
+                        Task {
+                            let said = await listener.stop()
+                            guard !said.isEmpty else { return }
+                            await jensen.ask(said)
+                        }
+                    }
+            )
+            .accessibilityLabel("Hold to talk")
+            .accessibilityAddTraits(.isButton)
+    }
+}
+
 private struct MessageRow: View {
     let message: Message
 
@@ -216,6 +275,12 @@ private struct MessageRow: View {
                     SpotCard(place: place, onBadge: message.onBadge)
                 }
                 if !message.text.isEmpty { Text(message.text) }
+                ForEach(message.actions.indices, id: \.self) { at in
+                    let action = message.actions[at]
+                    if let link = action.url.flatMap(URL.init(string:)) {
+                        Link(action.summary, destination: link).font(.callout.weight(.semibold))
+                    }
+                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
