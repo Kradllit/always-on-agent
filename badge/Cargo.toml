@@ -1,0 +1,38 @@
+[package]
+name = "basecamp-badge"
+version = "0.1.0"
+edition = "2021"
+resolver = "2"
+rust-version = "1.82"
+
+[[bin]]
+name = "basecamp-badge"
+harness = false # no built-in test harness: this binary only runs on the badge
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true
+opt-level = "z"
+
+[dependencies]
+log = "0.4"
+anyhow = "1"
+esp-idf-svc = "0.53"
+esp32-nimble = "0.13"
+embedded-graphics-core = "0.4"
+u8g2-fonts = "0.8"
+
+[build-dependencies]
+embuild = "0.33"
+
+# The screen's driver chip (CO5300, over four SPI data lines) is driven by Espressif's C
+# component; everything else on the board is driven from Rust.
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_lcd_co5300", version = "2.2.0" }
+bindings_header = "components/bindings.h"
+
+# The speaker and microphone chips (ES8311, ES7210) are set up by Espressif's codec component.
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "espressif/esp_codec_dev", version = "~1.6.2" }

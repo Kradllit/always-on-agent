@@ -1,0 +1,13 @@
+# Local settings: the Wi-Fi built into the firmware. Never in git.
+local.env
+# Build output
+target/
+build/
+.embuild/
+sdkconfig
+sdkconfig.old
+# The build-and-flash watcher's own clone, logs and state
+ci/work/
+ci/logs/
+ci/state.json
+.DS_Store
