@@ -18,7 +18,7 @@
 //   GET  /log                                what the watcher did
 //   GET  /nearby?lat=..&lon=..&radius_m=400&limit=40   real places from Wikipedia and OpenStreetMap
 //                                            (PLAN-nearby-places.md), in the shape /recommend takes
-import { actions, ask, calendar, MODEL, newProfile, profiles, recommend, saveProfiles, shown } from "./brain.ts";
+import { actions, ask, calendar, lastLocation, MODEL, newProfile, profiles, recommend, saveProfiles, shown } from "./brain.ts";
 import { badgeQueue, log, startWatching, whereabouts } from "./always-on.ts";
 import { nearby } from "./nearby.ts";
 
@@ -57,6 +57,7 @@ Bun.serve({
           return json({ error: "unknown profile_id; POST /profile again" }, 400);
         }
         whereabouts.set(b.profile_id, { lat: Number(b.lat), lon: Number(b.lon), at: Date.now() });
+        lastLocation.set(b.profile_id, { lat: Number(b.lat), lon: Number(b.lon) });
         return json({ ok: true });
       }
       if (url.pathname === "/badge/next") {

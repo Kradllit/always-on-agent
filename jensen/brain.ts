@@ -61,6 +61,9 @@ export const shown = new Map<string, Shown[]>();
 export const actions: (Action & { profile: string; at: number })[] = [];
 export const calendar = new Map<string, string>(); // id → .ics text
 
+/** Where each person last was, set by the server on POST /location, so /ask can look around them. */
+export const lastLocation = new Map<string, { lat: number; lon: number }>();
+
 const id = () => Math.random().toString(36).slice(2, 10);
 
 function aboutPerson(p: Profile) {
@@ -184,6 +187,11 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "places_near_me",
+    description: "Real places around the person right now (landmarks, history, restaurants, cafes, museums), nearest first, each with a short description. Use for 'what's near me', 'recommend a place', 'where should I eat', and before suggesting anything nearby.",
+    input_schema: { type: "object", properties: { radius_m: { type: "integer", minimum: 100, maximum: 2000, default: 500 } } },
+  },
+  {
     name: "clock",
     description: "The current local date and time where the person is. Use before booking anything for 'tonight' or 'tomorrow'.",
     input_schema: { type: "object", properties: {} },
@@ -201,8 +209,15 @@ function ics(title: string, start: string, minutes: number, location = "", notes
     `LOCATION:${location}`, `DESCRIPTION:${notes.replace(/\n/g, "\\n")}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
 }
 
-function runTool(profile: Profile, name: string, input: any): { text: string; action?: Action } {
+async function runTool(profile: Profile, name: string, input: any): Promise<{ text: string; action?: Action }> {
   switch (name) {
+    case "places_near_me": {
+      const at = lastLocation.get(profile.id);
+      if (!at) return { text: "Their location isn't known yet; ask them to start walking or share location." };
+      const { nearby } = await import("./nearby.ts");
+      const { places } = await nearby(at.lat, at.lon, input.radius_m || 500, 15);
+      return { text: places.map((p) => `${p.name} (${p.distance_m} m, ${p.category || "place"}): ${(p.summary || "").slice(0, 220)}`).join("\n") || "Nothing found nearby." };
+    }
     case "clock":
       return { text: new Date().toLocaleString("en-US", { timeZone: TZ, dateStyle: "full", timeStyle: "short" }) };
     case "book_table": {
@@ -248,7 +263,7 @@ export async function ask(profile: Profile, question: string) {
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const block of resp.content) {
       if (block.type !== "tool_use") continue;
-      const r = runTool(profile, block.name, block.input);
+      const r = await runTool(profile, block.name, block.input);
       if (r.action) done.push(r.action);
       results.push({ type: "tool_result", tool_use_id: block.id, content: r.text });
     }
