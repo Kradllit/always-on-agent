@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jensen · an always-on walking companion</title>
+<style>body{margin:0;background:#0b0b0f;color:#f1f5f9;font:18px/1.55 -apple-system,system-ui,sans-serif}main{max-width:980px;margin:0 auto;padding:48px 24px}
+h1{font-size:44px;line-height:1.1;margin:0 0 10px}.lede{font-size:22px;color:#94a3b8;margin:0 0 34px}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.card{background:#16161d;border:1px solid #27272f;border-radius:18px;padding:22px;text-decoration:none;color:inherit;display:block}
+.card:hover{border-color:#6366f1}.card b{font-size:21px;display:block;margin-bottom:6px}.card span{color:#94a3b8;font-size:17px}
+h2{font-size:26px;margin:44px 0 12px}ol{padding-left:22px}li{margin:8px 0}code{background:#16161d;padding:2px 7px;border-radius:6px;font-size:16px}.who{color:#a5b4fc;font-size:16px}</style></head>
+<body><main>
+<h1>Jensen notices the places you'd love, as you walk</h1>
+<p class="lede">An always-on agent on the Claude Agent SDK, with a round badge as its face. Team Jensen, Anthropic Partner Basecamp, 13 Nov 2026.</p>
+<div class="grid">
+  <a class="card" href="prototype/"><b>The badge flow</b><span>Jensen interviews you, then pops nearby places up on the round badge. Tap to read why it picked them.</span></a>
+  <a class="card" href="wander/"><b>The learning brain (Wander)</b><span>Onboarding that remembers you, a taste model that learns from what you stop for or skip, and an itinerary that replans itself.</span></a>
+</div>
+<h2>How the pieces fit</h2>
+<ol>
+  <li><b>Onboarding</b>: a few interests, your pace and how long you have. Wander's onboarding, which remembers you on the next trip. <span class="who">iOS app, <code>ios-app</code> branch</span></li>
+  <li><b>Sense</b>: the phone sends where you are. <span class="who"><code>POST /location</code></span></li>
+  <li><b>Score and decide</b>: every 20 seconds an Agent SDK agent looks at the real places around you, with photos, and taps you only for one that fits. <span class="who"><code>jensen/always-on.ts</code></span></li>
+  <li><b>Nudge</b>: the badge shows the place as a round photo with its name. A tap shows why Jensen picked it for you. <span class="who"><code>GET /badge/next</code>, badge firmware</span></li>
+  <li><b>Ask and act</b>: ask the badge a follow-up out loud. Jensen answers and can request a table, find tickets or add the visit to your calendar. <span class="who"><code>POST /ask</code></span></li>
+  <li><b>Learn</b>: going in, skipping, "not my thing" and lingering steer the next picks. Wander's learning loop. <span class="who"><code>POST /feedback</code></span></li>
+</ol>
+<h2>Next</h2>
+<p>Run the agent loop on Claude Managed Agents with scheduled runs, so Jensen stays on without a laptop. Then add real bookings, and places in any city.</p>
+</main></body></html>

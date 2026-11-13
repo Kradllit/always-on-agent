@@ -29,6 +29,10 @@ export type Profile = {
   interests: string[];
   /** Anything else the interview learned ("walks slowly", "vegetarian", "visiting for 3 days"). */
   notes?: string;
+  /** From Wander's onboarding: how fast they walk, how long they have, how chatty Jensen should be. */
+  prefs?: { pace?: string; time_min?: number; chat?: number };
+  /** Wander's learning signals: what they went into, skipped or said no to. Newest last. */
+  signals?: { place: string; signal: "went_in" | "saved" | "not_my_thing" | "not_now" | "been_there" | "lingered"; at: number }[];
 };
 export type Place = {
   name: string;
@@ -53,7 +57,10 @@ export const calendar = new Map<string, string>(); // id → .ics text
 const id = () => Math.random().toString(36).slice(2, 10);
 
 function aboutPerson(p: Profile) {
-  return `Name: ${p.name}\nInto: ${p.interests.join("; ") || "not said yet"}` + (p.notes ? `\nAlso: ${p.notes}` : "");
+  const sig = (p.signals || []).slice(-12).map((s) => `${s.signal.replace(/_/g, " ")}: ${s.place}`).join("; ");
+  return `Name: ${p.name}\nInto: ${p.interests.join("; ") || "not said yet"}` + (p.notes ? `\nAlso: ${p.notes}` : "") +
+    (p.prefs ? `\nPrefers: ${JSON.stringify(p.prefs)}` : "") +
+    (sig ? `\nWhat they did with earlier suggestions (learn from it: more like what they went into, less like what they skipped): ${sig}` : "");
 }
 function aboutPlace(pl: Place) {
   return [
