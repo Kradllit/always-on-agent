@@ -19,6 +19,9 @@ struct FoundBadge: Identifiable, Equatable {
     let id: UUID
     var name: String
     var rssi: Int
+    /// The name this iPhone has cached for the board when it differs ("Concrete Badge" from
+    /// older firmware): the advert has no room for the name, so iOS shows the old one.
+    var cachedName: String?
 
     /// Signal strength in words.
     var nearness: String {
@@ -251,7 +254,7 @@ final class BadgeLink: NSObject, ObservableObject {
         connectTimer?.invalidate()
         connectTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
             guard let self, self.phase != .ready, self.paired == peripheral.identifier else { return }
-            self.lastError = "connect timed out, retrying"
+            self.lastError = "connect timed out, retrying (if this repeats: Settings, Bluetooth, Concrete Badge (i), Forget This Device)"
             self.central.cancelPeripheralConnection(peripheral)
             self.clear()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.reconnect() }
@@ -319,12 +322,14 @@ extension BadgeLink: CBCentralManagerDelegate {
         if peripheral.identifier == paired, phase == .away {
             connect(peripheral)
         }
-        let shown = name.isEmpty ? "Basecamp Badge" : name
+        // Our service in the advert means the hackathon firmware, whatever name iOS remembers.
+        let shown = services.contains(Self.service) || name.isEmpty ? "Basecamp Badge" : name
+        let cached = (name.isEmpty || name == shown) ? nil : name
         if let at = found.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Smooth the signal so the list doesn't jump around.
             found[at].rssi = (found[at].rssi * 3 + rssi) / 4
         } else {
-            found.append(FoundBadge(id: peripheral.identifier, name: shown, rssi: rssi))
+            found.append(FoundBadge(id: peripheral.identifier, name: shown, rssi: rssi, cachedName: cached))
             log.info("found \(shown) \(peripheral.identifier) \(rssi)")
         }
         found.sort { $0.rssi > $1.rssi }
@@ -339,7 +344,7 @@ extension BadgeLink: CBCentralManagerDelegate {
         case .notDetermined: "not asked"
         @unknown default: "?"
         }
-        let badges = found.prefix(3).map { "\($0.name) \($0.rssi)" }.joined(separator: ", ")
+        let badges = found.prefix(3).map { "\($0.name)\($0.cachedName.map { " (iOS: \($0))" } ?? "") \($0.rssi)\($0.id == paired ? " paired" : "")" }.joined(separator: ", ")
         var line = "BT \(auth) · \(power) · \(scanning ? "scanning" : "not scanning") · \(phaseWord)"
         line += " · badges: \(badges.isEmpty ? "none" : badges) · \(seenCount) devices"
         if let lastError { line += " · last error: \(lastError)" }
@@ -369,7 +374,11 @@ extension BadgeLink: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         log.info("failed to connect: \(error?.localizedDescription ?? "-")")
-        lastError = "connect failed: \(error?.localizedDescription ?? "unknown")"
+        if let error = error as? CBError, error.code == .peerRemovedPairingInformation || error.code == .encryptionTimedOut {
+            lastError = "this iPhone still has the old Concrete pairing: Settings, Bluetooth, Concrete Badge (i), Forget This Device"
+        } else {
+            lastError = "connect failed: \(error?.localizedDescription ?? "unknown")"
+        }
         guard peripheral.identifier == paired else { return }
         clear()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.reconnect() }
@@ -389,7 +398,7 @@ extension BadgeLink: CBCentralManagerDelegate {
 extension BadgeLink: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard let service = peripheral.services?.first(where: { $0.uuid == Self.service }) else {
-            lastError = "badge service not found: \(error?.localizedDescription ?? "\(peripheral.services?.count ?? 0) services")"
+            lastError = "badge service not found (\(error?.localizedDescription ?? "\(peripheral.services?.count ?? 0) services")): Settings, Bluetooth, Concrete Badge (i), Forget This Device, then Pair again"
             return
         }
         peripheral.discoverCharacteristics([Self.statusValue, Self.commandValue], for: service)

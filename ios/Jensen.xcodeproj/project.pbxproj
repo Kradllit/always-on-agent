@@ -12,6 +12,7 @@
 		1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */; };
 		455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */; };
 		528AE6DD5ADCA92D38994A18 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 637FBDFBFE1472367B5BC376 /* OnboardingView.swift */; };
+		6CFDAE21AF6D471E6FF085B8 /* YouView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB349BD7AF7634B7556B7C81 /* YouView.swift */; };
 		923762206CF563F3A53B6BB9 /* BrainLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6711D5F7804E4480189E8223 /* BrainLink.swift */; };
 		A3EE3AC74D35641AF89738AC /* PopUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD024B2C5CAC2033674551D /* PopUp.swift */; };
 		B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0826B68C932F41586A40C2 /* PlaceFinder.swift */; };
@@ -33,6 +34,7 @@
 		ADD024B2C5CAC2033674551D /* PopUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopUp.swift; sourceTree = "<group>"; };
 		BFE9828D80BD6E9E4641EF54 /* Listener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Listener.swift; sourceTree = "<group>"; };
 		C3534B49F90E95CFB453C95E /* Jensen.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Jensen.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CB349BD7AF7634B7556B7C81 /* YouView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouView.swift; sourceTree = "<group>"; };
 		E9226F53309662BD4EE99471 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -68,6 +70,7 @@
 				637FBDFBFE1472367B5BC376 /* OnboardingView.swift */,
 				9E0826B68C932F41586A40C2 /* PlaceFinder.swift */,
 				ADD024B2C5CAC2033674551D /* PopUp.swift */,
+				CB349BD7AF7634B7556B7C81 /* YouView.swift */,
 			);
 			path = Jensen;
 			sourceTree = "<group>";
@@ -141,6 +144,7 @@
 				528AE6DD5ADCA92D38994A18 /* OnboardingView.swift in Sources */,
 				B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */,
 				A3EE3AC74D35641AF89738AC /* PopUp.swift in Sources */,
+				6CFDAE21AF6D471E6FF085B8 /* YouView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

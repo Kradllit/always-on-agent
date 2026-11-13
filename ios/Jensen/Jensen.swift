@@ -12,6 +12,8 @@ struct Message: Identifiable {
     var place: Place?
     /// Whether the badge took it.
     var onBadge = false
+    /// What the person said about the place on this card (Wander's learning loop).
+    var feedback: Signal.Kind?
     /// What Jensen did for a question (a booking request, tickets, a calendar entry), with links.
     var actions: [Answer.Action] = []
 }
@@ -51,8 +53,39 @@ enum Pace: String, Codable, CaseIterable {
 }
 
 /// What the interview learned. Kept on the phone between launches.
+/// What the person said about a place (POST /feedback), kept for the You screen.
+struct Signal: Codable, Identifiable {
+    enum Kind: String, Codable, CaseIterable {
+        case wentIn = "went_in", notMyThing = "not_my_thing", notNow = "not_now", beenThere = "been_there"
+
+        var label: String {
+            switch self {
+            case .wentIn: "Going in"
+            case .notMyThing: "Not my thing"
+            case .notNow: "Not now"
+            case .beenThere: "Been there"
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .wentIn: "figure.walk"
+            case .notMyThing: "hand.thumbsdown"
+            case .notNow: "clock"
+            case .beenThere: "checkmark"
+            }
+        }
+    }
+    var id = UUID()
+    var place: String
+    var kind: String
+    var signal: Kind
+    var at = Date()
+}
+
 private struct Profile: Codable {
     var interests: [Interest] = []
+    var signals: [Signal]?
     var pace: Pace = .lots
     /// From the onboarding screen (Wander's): walking pace, minutes available, how chatty.
     var walk: String?
@@ -375,6 +408,44 @@ final class Jensen: ObservableObject {
         say("📍 Spotted something for you:")
         messages.append(Message(from: .jensen, text: "", place: place, onBadge: onBadge))
         if pop == nil { pop = place } else { popQueue.append(place) }
+    }
+
+    // MARK: Learning (Wander's loop)
+
+    /// What the person said about the place on a card: to the brain (POST /feedback), kept
+    /// for the You screen, and answered in the chat.
+    func feedback(_ messageID: UUID, _ kind: Signal.Kind) {
+        guard let at = messages.firstIndex(where: { $0.id == messageID }), let place = messages[at].place,
+              messages[at].feedback == nil else { return }
+        messages[at].feedback = kind
+        profile.signals = (profile.signals ?? []) + [Signal(place: place.name, kind: place.kind, signal: kind)]
+        save()
+        brain.feedback(place: place.name, signal: kind.rawValue)
+        let name = place.headline ?? place.name
+        switch kind {
+        case .wentIn: say("Enjoy \(name). I'll remember you went in.")
+        case .notMyThing: say("Got it. I'll show you fewer places like this.")
+        case .notNow: say("No problem, I'll keep \(name) in mind for later.")
+        case .beenThere: say("Nice. I'll take that as a sign you like places like this.")
+        }
+    }
+
+    /// What Jensen has learned, for the You screen.
+    var learned: (interests: [String], walk: String, minutes: Int, chat: Double, signals: [Signal], shown: Int) {
+        (profile.interests.map(\.words), profile.walk ?? "normal", profile.minutes ?? 240, profile.chat ?? 0.5,
+         profile.signals ?? [], messages.filter { $0.place != nil }.count)
+    }
+
+    /// Forget everything Jensen learned, back to the onboarding screen.
+    func forgetEverything() {
+        startOver()
+    }
+
+    /// Back to the onboarding screen to pick again, keeping what was learned on the way.
+    func editPicks() {
+        let kept = profile.signals
+        startOver()
+        profile.signals = kept
     }
 
     /// The pop-up went back to the eyes: the next one, if any.

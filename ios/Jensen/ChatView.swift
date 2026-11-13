@@ -10,6 +10,7 @@ struct ChatView: View {
     @State private var draft = ""
     @State private var showingWalk = false
     @State private var showingBadge = false
+    @State private var showingYou = false
     @State private var settingServer = false
     @State private var serverDraft = ""
     @FocusState private var typing: Bool
@@ -107,6 +108,9 @@ struct ChatView: View {
                             serverDraft = brain.address
                             settingServer = true
                         }
+                        Button("You: what Jensen learned", systemImage: "sparkles") {
+                            showingYou = true
+                        }
                         Button("Badge", systemImage: "dot.radiowaves.left.and.right") {
                             showingBadge = true
                         }
@@ -133,6 +137,9 @@ struct ChatView: View {
                     .presentationDetents([.medium, .large])
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
                     .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showingYou) {
+                YouView()
             }
             .sheet(isPresented: $showingBadge) {
                 BadgeSheet()
@@ -271,8 +278,8 @@ private struct MessageRow: View {
         HStack {
             if message.from == .you { Spacer(minLength: 48) }
             VStack(alignment: .leading, spacing: 10) {
-                if let place = message.place {
-                    SpotCard(place: place, onBadge: message.onBadge)
+                if message.place != nil {
+                    SpotCard(message: message)
                 }
                 if !message.text.isEmpty { Text(message.text) }
                 ForEach(message.actions.indices, id: \.self) { at in

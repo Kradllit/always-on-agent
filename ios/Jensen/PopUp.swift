@@ -124,9 +124,12 @@ struct PopUp: View {
 /// The chat's record of a pick, as in the prototype: a round picture, the headline and
 /// walking minutes; a tap opens why Jensen picked it.
 struct SpotCard: View {
-    let place: Place
-    let onBadge: Bool
+    @EnvironmentObject private var jensen: Jensen
+    let message: Message
     @State private var open = false
+
+    private var place: Place { message.place! }
+    private var onBadge: Bool { message.onBadge }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -165,6 +168,27 @@ struct SpotCard: View {
                         if source.contains("osm") { Text("© OpenStreetMap contributors") }
                     }
                     .font(.caption2).foregroundStyle(.secondary)
+                }
+            }
+            // Wander's learning loop: what they thought of it goes to the brain (POST /feedback).
+            if let said = message.feedback {
+                Label(said.label, systemImage: said.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            } else {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 6) {
+                    ForEach(Signal.Kind.allCases, id: \.self) { kind in
+                        Button {
+                            jensen.feedback(message.id, kind)
+                        } label: {
+                            Label(kind.label, systemImage: kind.symbol)
+                                .font(.caption.weight(.medium))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                        .buttonBorderShape(.capsule)
+                        .tint(kind == .wentIn ? .accentColor : .secondary)
+                    }
                 }
             }
             Label(onBadge ? "On the badge" : "Badge not connected",

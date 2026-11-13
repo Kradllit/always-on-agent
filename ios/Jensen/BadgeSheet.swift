@@ -61,6 +61,9 @@ struct BadgeSheet: View {
 
     private var scanSection: some View {
         Section {
+            if let problem = badge.lastError {
+                Text(problem).font(.footnote).foregroundStyle(.orange)
+            }
             if badge.found.isEmpty {
                 HStack(spacing: 10) {
                     ProgressView()
@@ -71,7 +74,8 @@ struct BadgeSheet: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(found.name).font(.headline)
-                        Text(found.nearness).font(.subheadline).foregroundStyle(.secondary)
+                        Text(found.nearness + (found.cachedName.map { " · this iPhone calls it \($0)" } ?? ""))
+                            .font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer()
                     if found.id == badge.paired {
@@ -85,7 +89,7 @@ struct BadgeSheet: View {
         } header: {
             Text("Badges nearby")
         } footer: {
-            Text("Turn the badge on and hold it near the iPhone. Badges are listed by the name they advertise: the nearest is at the top, and the one you pair says \"Paired with Jensen\". If none shows up, another phone may be connected to it.")
+            Text("Turn the badge on and hold it near the iPhone. Badges running the hackathon firmware are listed, the nearest at the top, and the one you pair says \"Paired with Jensen\". If none shows up, another phone may be connected to it.")
         }
     }
 
