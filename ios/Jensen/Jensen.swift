@@ -405,7 +405,7 @@ final class Jensen: ObservableObject {
         lastShownAt = Date()
         place.picture = await finder.picture(of: place)
         // One card, then its picture.
-        let onBadge = badge.pick(headline: picked.headline, why: picked.why, picture: place.picture)
+        let onBadge = badge.pick(headline: picked.headline, why: picked.why, note: walkingTime(place.distance), picture: place.picture)
         say("📍 Spotted something for you:")
         messages.append(Message(from: .jensen, text: "", place: place, onBadge: onBadge))
         if pop == nil { pop = place } else { popQueue.append(place) }

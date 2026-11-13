@@ -130,12 +130,16 @@ final class BadgeLink: NSObject, ObservableObject {
 
     /// A place the brain picked, as "headline|why" for the badge to show and read.
     @discardableResult
-    func pick(headline: String, why: String, picture: UIImage? = nil) -> Bool {
+    /// "headline|why||note": the third part (a picture's address) stays empty, the photo
+    /// comes over Bluetooth; the note shows under the headline ("4 min walk").
+    func pick(headline: String, why: String, note: String? = nil, picture: UIImage? = nil) -> Bool {
         stopPaging()
         // The picture follows once the badge has the line (src/ble.rs: "Send it after the place's line").
         afterLine = picture
         let clean = { (text: String) in Self.latin(text).replacingOccurrences(of: "|", with: "/") }
-        return write(String((clean(headline) + "|" + clean(why)).prefix(400)))
+        var line = clean(headline) + "|" + String(clean(why).prefix(380))
+        if let note { line += "||" + clean(note) }
+        return write(line)
     }
 
     /// An answer to a question: a longer line, which the badge shows as a card of text.
@@ -146,9 +150,9 @@ final class BadgeLink: NSObject, ObservableObject {
         return write(String(Self.latin(text).replacingOccurrences(of: "|", with: "/").prefix(400)))
     }
 
-    /// Send a place's picture after its line: a JPEG of 234 x 182 (what the badge takes
-    /// fastest), the first piece "JPG1" and the length (4 bytes, low byte first), then the
-    /// bytes in as many writes as it takes, without waiting for each one.
+    /// Send a place's picture after its line: a square JPEG of 234 x 234 (the photo fills the
+    /// round screen), the first piece "JPG1" and the length (4 bytes, low byte first), then
+    /// the bytes, one acknowledged write after another.
     @discardableResult
     func sendPicture(_ image: UIImage) -> Bool {
         guard connected, let badge, pictureCharacteristic != nil,
@@ -156,7 +160,8 @@ final class BadgeLink: NSObject, ObservableObject {
         var all = Data("JPG1".utf8)
         withUnsafeBytes(of: UInt32(jpeg.count).littleEndian) { all.append(contentsOf: $0) }
         all.append(jpeg)
-        let size = max(20, badge.maximumWriteValueLength(for: .withoutResponse))
+        // A single ATT write per piece: the badge's MTU is 256.
+        let size = max(20, min(253, badge.maximumWriteValueLength(for: .withResponse)))
         pieces = stride(from: 0, to: all.count, by: size).map { all.subdata(in: $0..<min($0 + size, all.count)) }
         lastPicture = "\(jpeg.count) bytes in \(pieces.count) pieces"
         print("badge: picture \(jpeg.count) bytes, \(pieces.count) pieces of \(size)")
@@ -164,16 +169,18 @@ final class BadgeLink: NSObject, ObservableObject {
         return true
     }
 
+    /// One piece at a time, each written with response; the next goes when the badge has
+    /// acknowledged this one (peripheral(_:didWriteValueFor:)). Writes without response lost
+    /// every piece after the first.
     private func sendPieces() {
         guard let badge, let pictureCharacteristic else { pieces = []; return }
-        while !pieces.isEmpty, badge.canSendWriteWithoutResponse {
-            badge.writeValue(pieces.removeFirst(), for: pictureCharacteristic, type: .withoutResponse)
-        }
+        guard !pieces.isEmpty else { return }
+        badge.writeValue(pieces.removeFirst(), for: pictureCharacteristic, type: .withResponse)
     }
 
-    /// The picture cropped to fill 234 x 182, as a JPEG.
+    /// The picture cropped to fill a 234 x 234 square, as a JPEG.
     private static func cardJPEG(_ image: UIImage) -> Data? {
-        let box = CGSize(width: 234, height: 182)
+        let box = CGSize(width: 234, height: 234)
         guard image.size.width > 0, image.size.height > 0 else { return nil }
         let scale = max(box.width / image.size.width, box.height / image.size.height)
         let drawn = CGSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -493,12 +500,15 @@ extension BadgeLink: CBPeripheralDelegate {
         }
     }
 
-    func peripheralIsReady(toSendWriteWithoutResponse peripheral: CBPeripheral) {
-        sendPieces()
-    }
-
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error { lastError = "write failed: \(error.localizedDescription)" }
+        if characteristic.uuid == Self.pictureValue {
+            if error == nil { sendPieces() } else {
+                pieces = []
+                lastPicture = "stopped: \(error!.localizedDescription)"
+            }
+            return
+        }
         if characteristic.uuid == Self.commandValue, let picture = afterLine {
             afterLine = nil
             if error == nil { sendPicture(picture) }
