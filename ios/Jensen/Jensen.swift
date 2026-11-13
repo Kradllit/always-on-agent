@@ -69,6 +69,10 @@ final class Jensen: ObservableObject {
 
     private let badge: BadgeLink
     private let finder: PlaceFinder
+    private let brain: BrainLink
+    /// How much faster than life time runs (a demo walk at 5x or 20x): the waits between
+    /// places shrink by as much, so a fast walk passes as many places as a slow one.
+    var timeScale = 1.0
     private var profile = Profile()
     private var shown = Set<String>()
     private var lastShownAt = Date.distantPast
@@ -78,11 +82,12 @@ final class Jensen: ObservableObject {
 
     private static let saved = "profile"
 
-    init(badge: BadgeLink, finder: PlaceFinder) {
+    init(badge: BadgeLink, finder: PlaceFinder, brain: BrainLink) {
         self.badge = badge
         self.finder = finder
+        self.brain = brain
         finder.onAuthorization = { [weak self] _ in self?.permissionChanged() }
-        finder.onMove = { [weak self] _ in self?.look() }
+        finder.onMove = { [weak self] location in self?.moved(to: location) }
         if let data = UserDefaults.standard.data(forKey: Self.saved),
            let profile = try? JSONDecoder().decode(Profile.self, from: data), !profile.interests.isEmpty {
             self.profile = profile
@@ -106,6 +111,15 @@ final class Jensen: ObservableObject {
         case .location: ["Share my location", "Not now"]
         case .exploring: [paused ? "Resume" : "Pause"]
         }
+    }
+
+    /// Whether the interview got as far as knowing what to look for.
+    var interviewed: Bool { !profile.interests.isEmpty && (stage == .location || stage == .exploring) }
+
+    /// A demo walk is setting off: it stands in for the phone's location, so Jensen starts
+    /// looking even when the location question was never answered.
+    func joinDemo() {
+        if stage == .location, !profile.interests.isEmpty { explore(announce: true) }
     }
 
     /// Whether picks collect into one answer (the interests) or are an answer each.
@@ -216,11 +230,19 @@ final class Jensen: ObservableObject {
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.look() }
     }
 
+    /// The phone (or the demo walk) is somewhere new: the server hears of it, and Jensen looks around.
+    private func moved(to location: CLLocation) {
+        guard stage == .exploring, !paused else { return }
+        brain.report(location, interests: profile.interests.map(\.words), pace: profile.pace.rawValue)
+        look()
+    }
+
     /// Look around, if it is time to, and push the nearest place not shown yet.
     private func look() {
         guard stage == .exploring, !paused, !looking, let location = finder.location else { return }
         let now = Date()
-        guard now.timeIntervalSince(lastShownAt) >= profile.pace.gap, now.timeIntervalSince(lastLookedAt) >= 10 else { return }
+        guard now.timeIntervalSince(lastShownAt) >= profile.pace.gap / timeScale,
+              now.timeIntervalSince(lastLookedAt) >= max(10 / timeScale, 2) else { return }
         lastLookedAt = now
         looking = true
         let interests = profile.interests

@@ -10,16 +10,20 @@
 		0E9692DCA0CA21AF08C394CB /* BadgeLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E87DD59ADE71DDC49EEF667 /* BadgeLink.swift */; };
 		1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */; };
 		455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */; };
+		923762206CF563F3A53B6BB9 /* BrainLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6711D5F7804E4480189E8223 /* BrainLink.swift */; };
 		B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0826B68C932F41586A40C2 /* PlaceFinder.swift */; };
 		BFDCDBBAB8F22F702C84F9D5 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9226F53309662BD4EE99471 /* ChatView.swift */; };
+		E58BEC5FE24785BCAC83DCB8 /* DemoWalk.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8DA11856332395AF942579 /* DemoWalk.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		08ADC0654F12340E67AEC37E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JensenApp.swift; sourceTree = "<group>"; };
+		6711D5F7804E4480189E8223 /* BrainLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrainLink.swift; sourceTree = "<group>"; };
 		8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Jensen.swift; sourceTree = "<group>"; };
 		9E0826B68C932F41586A40C2 /* PlaceFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceFinder.swift; sourceTree = "<group>"; };
 		9E87DD59ADE71DDC49EEF667 /* BadgeLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeLink.swift; sourceTree = "<group>"; };
+		AB8DA11856332395AF942579 /* DemoWalk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoWalk.swift; sourceTree = "<group>"; };
 		C3534B49F90E95CFB453C95E /* Jensen.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Jensen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9226F53309662BD4EE99471 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -45,7 +49,9 @@
 			isa = PBXGroup;
 			children = (
 				9E87DD59ADE71DDC49EEF667 /* BadgeLink.swift */,
+				6711D5F7804E4480189E8223 /* BrainLink.swift */,
 				E9226F53309662BD4EE99471 /* ChatView.swift */,
+				AB8DA11856332395AF942579 /* DemoWalk.swift */,
 				08ADC0654F12340E67AEC37E /* Info.plist */,
 				8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */,
 				401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */,
@@ -113,7 +119,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				0E9692DCA0CA21AF08C394CB /* BadgeLink.swift in Sources */,
+				923762206CF563F3A53B6BB9 /* BrainLink.swift in Sources */,
 				BFDCDBBAB8F22F702C84F9D5 /* ChatView.swift in Sources */,
+				E58BEC5FE24785BCAC83DCB8 /* DemoWalk.swift in Sources */,
 				455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */,
 				1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */,
 				B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */,

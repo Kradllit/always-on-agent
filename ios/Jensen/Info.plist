@@ -20,8 +20,15 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Jensen shows the places it finds on your badge over Bluetooth.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Jensen talks to its server when that runs on a computer on this network.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Jensen looks for interesting places around where you are.</string>
 	<key>UIBackgroundModes</key>

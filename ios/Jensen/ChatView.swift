@@ -4,7 +4,12 @@ import SwiftUI
 struct ChatView: View {
     @EnvironmentObject private var jensen: Jensen
     @EnvironmentObject private var badge: BadgeLink
+    @EnvironmentObject private var brain: BrainLink
+    @EnvironmentObject private var walk: DemoWalk
     @State private var draft = ""
+    @State private var showingWalk = false
+    @State private var settingServer = false
+    @State private var serverDraft = ""
     @FocusState private var typing: Bool
 
     var body: some View {
@@ -43,8 +48,19 @@ struct ChatView: View {
                         BadgePill(phase: badge.phase, status: badge.status)
                     }
                 }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showingWalk = true
+                    } label: {
+                        Text(walk.walking ? "Walking" : "Demo walk")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button("Jensen server (\(serverState))", systemImage: "server.rack") {
+                            serverDraft = brain.address
+                            settingServer = true
+                        }
                         Button("Start over", systemImage: "arrow.counterclockwise", role: .destructive) {
                             draft = ""
                             jensen.startOver()
@@ -54,6 +70,40 @@ struct ChatView: View {
                     }
                 }
             }
+            .onAppear {
+                // Launched with `-demoWalk 20`: set off at once at that speed (for demos and tests).
+                let speed = UserDefaults.standard.double(forKey: "demoWalk")
+                guard speed > 0, !walk.walking else { return }
+                walk.speed = speed
+                jensen.joinDemo()
+                walk.start()
+                showingWalk = true
+            }
+            .sheet(isPresented: $showingWalk) {
+                DemoWalkView()
+                    .presentationDetents([.medium, .large])
+                    .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .presentationDragIndicator(.visible)
+            }
+            .alert("Jensen server", isPresented: $settingServer) {
+                TextField("http://192.168.1.20:8787", text: $serverDraft)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Save") { brain.address = serverDraft.trimmingCharacters(in: .whitespacesAndNewlines) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Where jensen/server.ts runs. Jensen sends it your position while you walk. Leave it empty to send nothing.")
+            }
+        }
+    }
+
+    private var serverState: String {
+        if brain.address.isEmpty { return "not set" }
+        switch brain.state {
+        case .off: return "set"
+        case .ok: return "connected"
+        case .failing: return "no answer"
         }
     }
 

@@ -64,6 +64,9 @@ final class PlaceFinder: NSObject, ObservableObject, CLLocationManagerDelegate {
     var onAuthorization: ((CLAuthorizationStatus) -> Void)?
     var onMove: ((CLLocation) -> Void)?
 
+    /// A demo walk is feeding positions: the phone's own are left out meanwhile.
+    var demo = false
+
     private let manager = CLLocationManager()
 
     override init() {
@@ -101,9 +104,16 @@ final class PlaceFinder: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let newest = locations.last else { return }
+        guard !demo, let newest = locations.last else { return }
         location = newest
         onMove?(newest)
+    }
+
+    /// A position from somewhere other than the phone's GPS (the demo walk). Treated
+    /// exactly like one of the phone's own.
+    func feed(_ position: CLLocation) {
+        location = position
+        onMove?(position)
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {}

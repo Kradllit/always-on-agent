@@ -22,6 +22,9 @@ targets:
         CFBundleDisplayName: Jensen
         NSBluetoothAlwaysUsageDescription: "Jensen shows the places it finds on your badge over Bluetooth."
         NSLocationWhenInUseUsageDescription: "Jensen looks for interesting places around where you are."
+        NSLocalNetworkUsageDescription: "Jensen talks to its server when that runs on a computer on this network."
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         UIBackgroundModes: [bluetooth-central, location]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
