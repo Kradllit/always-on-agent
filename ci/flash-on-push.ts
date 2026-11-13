@@ -72,10 +72,12 @@ async function build(sha: string): Promise<boolean> {
   await $`git -C ${work} checkout --quiet --force ${sha}`;
   const buildLog = join(logs, `${sha.slice(0, 7)}.build.log`);
   const started = Date.now();
-  const run = await $`zsh ${join(work, "build.sh")} > ${buildLog} 2>&1`
-    .env({ ...process.env, BADGE_LOCAL_ENV: localEnv }).nothrow();
+  // Through zsh, which does the redirect: Bun's own shell refuses this one.
+  const run = Bun.spawn(["zsh", "-c", 'exec zsh "$1" > "$2" 2>&1', "build", join(work, "build.sh"), buildLog],
+    { env: { ...process.env, BADGE_LOCAL_ENV: localEnv }, stdio: ["ignore", "ignore", "ignore"] });
+  const exitCode = await run.exited;
   const took = Math.round((Date.now() - started) / 1000);
-  if (run.exitCode === 0 && existsSync(join(work, "build/badge.bin"))) {
+  if (exitCode === 0 && existsSync(join(work, "build/badge.bin"))) {
     log(`${sha.slice(0, 7)} built in ${took} s`);
     return true;
   }
