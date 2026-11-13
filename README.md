@@ -2,21 +2,25 @@
 
 A starting firmware in Rust for a small round touchscreen badge, the Waveshare
 ESP32-S3-Touch-AMOLED-1.75C.
-It is a base to build on: two eyes, a battery, Wi-Fi, Bluetooth and a touchscreen that
-reacts. Everything else is yours to add.
+It is a base to build on: two eyes, a touchscreen that reacts, text, a button, a shake
+sensor, a battery, Wi-Fi and Bluetooth, with one file (`src/app.rs`) where features go.
 
 What it does today:
 
 - **Eyes.** Two white blocks on a black screen that blink and glance around.
 - **Touch.** Put a finger on the screen and the eyes look at it. Tap and they widen, then
   blink. Stroke the screen (pet it) and they curve into happy pink arcs and bounce.
+- **Text.** A caption of one or two lines under the eyes: `badge.say("hello")`.
+- **Button and shake.** BOOT shows the battery and the Wi-Fi address; shaking the badge
+  startles it.
 - **Battery.** The power chip is set up for charging; the level and charging state are read
   every five seconds. Below 15 % on battery the eyes droop. Untouched, the screen dims after
   30 seconds and, on battery, switches off after two minutes. A touch brings it back.
   Holding PWR for four seconds switches the badge off.
 - **Wi-Fi.** Joins the network named at build time and rejoins when it drops.
 - **Bluetooth.** Shows up as "Basecamp Badge". A status value to read and a few commands to
-  write (`pet`, `blink`, `bright 60`); see `src/ble.rs`.
+  write (`pet`, `blink`, `bright 60`); any other text written to it shows on the screen.
+  See `src/ble.rs`.
 - **Crash guard.** A firmware that crashes three times in a row at start stops in safe mode
   with a black screen, ready for the next flash.
 
@@ -28,7 +32,7 @@ What it does today:
 | Screen | 1.75" round AMOLED, 466 x 466, CO5300 driver chip | SPI with four data lines |
 | Touch | CST9217 | I2C, address 0x5A |
 | Power | AXP2101: battery charging, power rails, PWR button | I2C, address 0x34 |
-| Motion | QMI8658 accelerometer and gyroscope (not used yet) | I2C, address 0x6B |
+| Motion | QMI8658 accelerometer and gyroscope (the accelerometer is in use) | I2C, address 0x6B |
 | Sound | ES8311 speaker codec, ES7210 two microphones, a small speaker (not used yet) | I2C and I2S |
 | Buttons | BOOT (GPIO 0), PWR (through the power chip) | |
 | USB-C | Power, flashing and the log, all on the chip's own USB | |
@@ -50,10 +54,36 @@ face are plain Rust in `src/`.
 
 ## The code
 
+Features go in `src/app.rs`. The badge calls `on_event` there whenever something happens
+and hands over a `Badge` to answer with:
+
+```rust
+pub fn on_event(&mut self, event: Event, badge: &mut Badge) {
+    match event {
+        Event::Shake => {
+            badge.face.startle();
+            badge.say("whoa!");
+        }
+        Event::Message(text) => badge.say_for(&text, 6000),
+        _ => {}
+    }
+}
+```
+
+The events: `Start`, `TouchDown { x, y }`, `TouchUp`, `Tap`, `Pet`, `ButtonDown`,
+`ButtonUp { held_ms }`, `Shake`, `Message(text)` (a line sent over Bluetooth) and `Second`.
+On the badge: `say`, `say_for`, `say_and_keep`, `hush`, `face`, `battery`, `ip`, `tilt`, `now`.
+Every event is also written to the log.
+
 | File | What |
 |---|---|
-| `src/main.rs` | Start-up and the loop: read the touch, move the face, paint, rest the screen |
-| `src/eyes.rs` | The face and what a touch does to it. No hardware in here: start with this one |
+| `src/app.rs` | Your features: what the badge does when something happens |
+| `src/badge.rs` | The events an app gets and what it can do with the badge |
+| `src/main.rs` | Start-up and the loop: read the hardware, tell the app, paint, rest the screen |
+| `src/eyes.rs` | The face and what a touch does to it. No hardware in here |
+| `src/text.rs` | The caption under the eyes |
+| `src/button.rs` | The BOOT button |
+| `src/motion.rs` | The motion sensor: tilt and shakes |
 | `src/display.rs` | The screen: paint a rectangle, set the brightness |
 | `src/touch.rs` | Where the finger is |
 | `src/power.rs` | Battery level, charging, power off |
@@ -109,8 +139,9 @@ Maximize Compatibility).
 
 With nRF Connect or LightBlue on a phone, connect to "Basecamp Badge" and open the service
 `ba5eca3b-0001-…`. Read `…0002…` for the status (battery, Wi-Fi address, mood, how many
-times it has been petted) or subscribe to it. Write text to `…0003…`: `pet`, `blink` or
-`bright 60`. There is no pairing: anyone nearby can do this.
+times it has been petted) or subscribe to it. Write text to `…0003…`: `pet`, `blink`,
+`bright 60`, or any other line, which the app shows on the screen. There is no pairing:
+anyone nearby can do this.
 
 ## If the badge is stuck
 

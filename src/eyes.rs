@@ -36,6 +36,15 @@ pub struct Look {
     pub color: [u8; 3],
 }
 
+/// What a finger just did, as far as the face can tell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gesture {
+    /// A short touch that didn't move.
+    Tap,
+    /// The finger has stroked far enough to count as petting. Once per stroke.
+    Pet,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mood {
     Calm,
@@ -130,6 +139,12 @@ impl Face {
         self.blink_next = self.now;
     }
 
+    /// Widen the eyes for a moment, as a tap does.
+    pub fn startle(&mut self) {
+        self.wide_until = self.now + 450;
+        self.blink_next = self.now + 450;
+    }
+
     fn next_random(&mut self) -> u32 {
         // xorshift: plenty for blinks and glances
         self.random ^= self.random << 13;
@@ -139,10 +154,11 @@ impl Face {
     }
 
     /// Move the face along to `now` (milliseconds since start). `finger` is where the
-    /// screen is being touched, if it is.
-    pub fn update(&mut self, now: u64, finger: Option<(i32, i32)>) {
+    /// screen is being touched, if it is. Returns what the finger just did, if anything.
+    pub fn update(&mut self, now: u64, finger: Option<(i32, i32)>) -> Option<Gesture> {
         let dt = (now.saturating_sub(self.now) as f32 / 1000.0).min(0.1);
         self.now = now;
+        let mut gesture = None;
 
         match (self.finger, finger) {
             (None, Some(_)) => {
@@ -156,14 +172,15 @@ impl Face {
                 if !self.petting && self.path > PET_PATH {
                     self.petting = true;
                     self.pets += 1;
+                    gesture = Some(Gesture::Pet);
                 }
             }
             (Some(_), None) => {
                 if self.petting {
                     self.joy_until = now + 1800;
                 } else if now - self.down_at < 300 && self.path < 25.0 {
-                    self.wide_until = now + 450;
-                    self.blink_next = now + 450;
+                    self.startle();
+                    gesture = Some(Gesture::Tap);
                 }
                 self.petting = false;
             }
@@ -198,6 +215,7 @@ impl Face {
             self.blink_from = now;
             self.blink_next = now + 2500 + (self.next_random() % 3500) as u64;
         }
+        gesture
     }
 
     /// What the face looks like right now.

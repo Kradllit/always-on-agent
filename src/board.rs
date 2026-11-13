@@ -21,9 +21,10 @@ pub const LCD_CLK: i32 = 38;
 pub const LCD_DATA: [i32; 4] = [4, 5, 6, 7];
 pub const LCD_RESET: i32 = 1;
 
+// The BOOT button is GPIO 0, low when pressed (main.rs hands that pin over).
+
 // On the board and not used yet (the team's to pick up):
-//   BOOT button                GPIO 0 (low when pressed)
-//   QMI8658 motion sensor      I2C 0x6B
+//   QMI8658 gyroscope          I2C 0x6B (its accelerometer is in use: motion.rs)
 //   ES8311 speaker codec       I2C 0x18, amplifier enable GPIO 46
 //   ES7210 microphones         I2C 0x40
 //   I2S audio                  MCLK 16, WS 45, BCLK 9, DIN 10, DOUT 8

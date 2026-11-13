@@ -6,6 +6,7 @@
 //!            pet            be happy for a while, as if petted
 //!            blink          blink once
 //!            bright 60      screen brightness, 5 to 100
+//!            anything else  handed to the app as Event::Message (app.rs shows it on screen)
 //!
 //! Any phone or laptop nearby can connect: there is no pairing. Try it with the nRF Connect
 //! or LightBlue app.
@@ -48,14 +49,13 @@ pub fn start(status: Arc<Mutex<Status>>, commands: Sender<Command>) -> Result<()
     let command_value = service.lock().create_characteristic(COMMAND, NimbleProperties::WRITE);
     let commands = Mutex::new(commands);
     command_value.lock().on_write(move |args| {
-        let line = String::from_utf8_lossy(args.recv_data()).trim().to_lowercase();
-        match parse(&line) {
-            Some(command) => {
-                log::info!("Bluetooth: {line}");
-                let _ = commands.lock().unwrap().send(command);
-            }
-            None => log::warn!("Bluetooth: not a command: {line:?}"),
+        let line = String::from_utf8_lossy(args.recv_data()).trim().to_string();
+        if line.is_empty() {
+            return;
         }
+        log::info!("Bluetooth: {line}");
+        let command = parse(&line.to_lowercase()).unwrap_or(Command::Message(line));
+        let _ = commands.lock().unwrap().send(command);
     });
 
     advertising

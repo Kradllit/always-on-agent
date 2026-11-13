@@ -21,6 +21,8 @@ log = "0.4"
 anyhow = "1"
 esp-idf-svc = "0.53"
 esp32-nimble = "0.13"
+embedded-graphics-core = "0.4"
+u8g2-fonts = "0.8"
 
 [build-dependencies]
 embuild = "0.33"
