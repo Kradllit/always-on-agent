@@ -57,6 +57,7 @@ final class BadgeLink: NSObject, ObservableObject {
     @Published private(set) var power = "unknown"
     private var seenNames: [UUID: (name: String, rssi: Int)] = [:]
     private var connectTimer: Timer?
+    private var timeouts = 0
     /// The remembered badge, by the identifier this iPhone gave it.
     @Published private(set) var paired: UUID? {
         didSet {
@@ -254,7 +255,8 @@ final class BadgeLink: NSObject, ObservableObject {
         connectTimer?.invalidate()
         connectTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
             guard let self, self.phase != .ready, self.paired == peripheral.identifier else { return }
-            self.lastError = "connect timed out, retrying (if this repeats: Settings, Bluetooth, Concrete Badge (i), Forget This Device)"
+            self.timeouts += 1
+            self.lastError = "connect timed out \(self.timeouts)x, retrying (if this repeats: Settings, Bluetooth, Concrete Badge (i), Forget This Device)"
             self.central.cancelPeripheralConnection(peripheral)
             self.clear()
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.reconnect() }
@@ -319,7 +321,8 @@ extension BadgeLink: CBCentralManagerDelegate {
         guard isBadge, rssi < 0 else { return }  // 127: not known
         seen[peripheral.identifier] = peripheral
         // The remembered badge is advertising: connect now (the standing request may have lapsed).
-        if peripheral.identifier == paired, phase == .away {
+        // (Only when no attempt is pending: adverts arrive many times a second.)
+        if peripheral.identifier == paired, phase == .away, connectTimer?.isValid != true {
             connect(peripheral)
         }
         // Our service in the advert means the hackathon firmware, whatever name iOS remembers.
@@ -355,7 +358,7 @@ extension BadgeLink: CBCentralManagerDelegate {
         switch phase {
         case .ready: "connected"
         case .connecting: "connecting"
-        case .away: "waiting for remembered badge"
+        case .away: "waiting for remembered badge (link: \(["disconnected", "connecting", "connected", "disconnecting"][min(badge?.state.rawValue ?? 0, 3)]))"
         case .unpaired: "not paired"
         case .bluetoothOff: "off"
         case .notAllowed: "not allowed"
