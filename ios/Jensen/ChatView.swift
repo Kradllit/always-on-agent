@@ -8,6 +8,7 @@ struct ChatView: View {
     @EnvironmentObject private var walk: DemoWalk
     @State private var draft = ""
     @State private var showingWalk = false
+    @State private var showingBadge = false
     @State private var settingServer = false
     @State private var serverDraft = ""
     @FocusState private var typing: Bool
@@ -43,10 +44,15 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text("Jensen").font(.headline)
-                        BadgePill(phase: badge.phase, status: badge.status)
+                    Button {
+                        showingBadge = true
+                    } label: {
+                        VStack(spacing: 1) {
+                            Text("Jensen").font(.headline).foregroundStyle(.primary)
+                            BadgePill(phase: badge.phase, status: badge.status)
+                        }
                     }
+                    .accessibilityHint("Pair or manage the badge")
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -60,6 +66,9 @@ struct ChatView: View {
                         Button("Jensen server (\(serverState))", systemImage: "server.rack") {
                             serverDraft = brain.address
                             settingServer = true
+                        }
+                        Button("Badge", systemImage: "dot.radiowaves.left.and.right") {
+                            showingBadge = true
                         }
                         Button("Start over", systemImage: "arrow.counterclockwise", role: .destructive) {
                             draft = ""
@@ -83,6 +92,11 @@ struct ChatView: View {
                 DemoWalkView()
                     .presentationDetents([.medium, .large])
                     .presentationBackgroundInteraction(.enabled(upThrough: .medium))
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showingBadge) {
+                BadgeSheet()
+                    .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
             .alert("Jensen server", isPresented: $settingServer) {
@@ -225,16 +239,26 @@ private struct BadgePill: View {
     let status: BadgeStatus?
 
     var body: some View {
-        Label(text, systemImage: phase == .ready ? "dot.radiowaves.left.and.right" : "circle.dashed")
+        Label(text, systemImage: icon)
             .font(.caption)
             .foregroundStyle(phase == .ready ? Color.green : Color.secondary)
             .labelStyle(.titleAndIcon)
     }
 
+    private var icon: String {
+        switch phase {
+        case .ready: "dot.radiowaves.left.and.right"
+        case .bluetoothOff, .notAllowed: "antenna.radiowaves.left.and.right.slash"
+        default: "circle.dashed"
+        }
+    }
+
     private var text: String {
         switch phase {
-        case .ready: status.map { "Badge \($0.battery)%" } ?? "Badge"
-        case .searching, .connecting: "Looking for badge"
+        case .ready: status.map { "Badge connected · \($0.battery)%" } ?? "Badge connected"
+        case .connecting: "Connecting to badge"
+        case .away: "Badge out of reach"
+        case .unpaired: "Tap to pair badge"
         case .bluetoothOff: "Bluetooth off"
         case .notAllowed: "Bluetooth not allowed"
         }
