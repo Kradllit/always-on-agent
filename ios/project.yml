@@ -1,0 +1,32 @@
+# Jensen, the phone app. Generate the Xcode project with `xcodegen` in this folder
+# (the generated Jensen.xcodeproj is committed too, so Xcode alone is enough to open it).
+name: Jensen
+options:
+  bundleIdPrefix: com.kradllit
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Jensen:
+    type: application
+    platform: iOS
+    sources: [Jensen]
+    info:
+      path: Jensen/Info.plist
+      properties:
+        CFBundleDisplayName: Jensen
+        NSBluetoothAlwaysUsageDescription: "Jensen shows the places it finds on your badge over Bluetooth."
+        NSLocationWhenInUseUsageDescription: "Jensen looks for interesting places around where you are."
+        UIBackgroundModes: [bluetooth-central, location]
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kradllit.jensen
+        PRODUCT_NAME: Jensen
+        TARGETED_DEVICE_FAMILY: "1"
