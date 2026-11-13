@@ -11,6 +11,7 @@
 		1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */; };
 		455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */; };
 		923762206CF563F3A53B6BB9 /* BrainLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6711D5F7804E4480189E8223 /* BrainLink.swift */; };
+		A3EE3AC74D35641AF89738AC /* PopUp.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD024B2C5CAC2033674551D /* PopUp.swift */; };
 		B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E0826B68C932F41586A40C2 /* PlaceFinder.swift */; };
 		BFDCDBBAB8F22F702C84F9D5 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9226F53309662BD4EE99471 /* ChatView.swift */; };
 		E58BEC5FE24785BCAC83DCB8 /* DemoWalk.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB8DA11856332395AF942579 /* DemoWalk.swift */; };
@@ -26,6 +27,7 @@
 		9E0826B68C932F41586A40C2 /* PlaceFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceFinder.swift; sourceTree = "<group>"; };
 		9E87DD59ADE71DDC49EEF667 /* BadgeLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BadgeLink.swift; sourceTree = "<group>"; };
 		AB8DA11856332395AF942579 /* DemoWalk.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoWalk.swift; sourceTree = "<group>"; };
+		ADD024B2C5CAC2033674551D /* PopUp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopUp.swift; sourceTree = "<group>"; };
 		C3534B49F90E95CFB453C95E /* Jensen.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Jensen.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E9226F53309662BD4EE99471 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -59,6 +61,7 @@
 				8CE24D19F87BCB4BE6BD9B08 /* Jensen.swift */,
 				401D839DBAC3AEB7DD0FBAFE /* JensenApp.swift */,
 				9E0826B68C932F41586A40C2 /* PlaceFinder.swift */,
+				ADD024B2C5CAC2033674551D /* PopUp.swift */,
 			);
 			path = Jensen;
 			sourceTree = "<group>";
@@ -129,6 +132,7 @@
 				455FC7F749496DCD700B6B8B /* Jensen.swift in Sources */,
 				1F6B52C39FD67CDFA0027810 /* JensenApp.swift in Sources */,
 				B5008BB9999B6A9DBB9DA533 /* PlaceFinder.swift in Sources */,
+				A3EE3AC74D35641AF89738AC /* PopUp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -58,6 +58,7 @@ private struct Profile: Codable {
 /// and pushes each one to the chat and to the badge.
 ///
 /// The interview is scripted and the looking is Apple's maps search; no model is behind it yet.
+@MainActor
 final class Jensen: ObservableObject {
     enum Stage { case interests, pace, location, exploring }
 
@@ -75,10 +76,20 @@ final class Jensen: ObservableObject {
     var timeScale = 1.0
     private var profile = Profile()
     private var shown = Set<String>()
+    /// Places the brain has already been asked about.
+    private var judged = Set<String>()
     private var lastShownAt = Date.distantPast
     private var lastLookedAt = Date.distantPast
     private var saidNothingNearby = false
     private var timer: Timer?
+    /// The place popping up over the chat, as on the badge in prototype/index.html.
+    @Published private(set) var pop: Place?
+    private var popQueue: [Place] = []
+    private var pollTimer: Timer?
+    private var polling = false
+    /// Jensen's own picks from Apple's maps are off for the demo: the brain's always-on
+    /// watcher chooses (GET /badge/next).
+    static let ownPicks = false
 
     private static let saved = "profile"
 
@@ -177,10 +188,15 @@ final class Jensen: ObservableObject {
     func startOver() {
         timer?.invalidate()
         timer = nil
+        pollTimer?.invalidate()
+        pollTimer = nil
+        pop = nil
+        popQueue = []
         finder.stop()
         UserDefaults.standard.removeObject(forKey: Self.saved)
         profile = Profile()
         shown = []
+        judged = []
         lastShownAt = .distantPast
         saidNothingNearby = false
         paused = false
@@ -220,6 +236,7 @@ final class Jensen: ObservableObject {
 
     private func explore(announce: Bool) {
         stage = .exploring
+        introduce()
         if announce {
             say("I'm on. Put the phone away: what I find shows on your badge, and here with a picture.")
         }
@@ -227,19 +244,30 @@ final class Jensen: ObservableObject {
         finder.start()
         timer?.invalidate()
         // The phone standing still gets places too: a look every few seconds, the pace decides the rest.
-        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in self?.look() }
+        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.look() }
+        }
+        // What the brain's watcher chose, every 3 seconds.
+        pollTimer?.invalidate()
+        pollTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            Task { @MainActor in await self?.poll() }
+        }
     }
 
     /// The phone (or the demo walk) is somewhere new: the server hears of it, and Jensen looks around.
     private func moved(to location: CLLocation) {
         guard stage == .exploring, !paused else { return }
-        brain.report(location, interests: profile.interests.map(\.words), pace: profile.pace.rawValue)
+        brain.report(location)
         look()
     }
 
-    /// Look around, if it is time to, and push the nearest place not shown yet.
+    /// Look around, if it is time to. Candidates are Apple's maps places with what the brain
+    /// knows about them (GET /nearby), plus the brain's own places that fit; the nearest
+    /// three not judged yet go to the brain one by one (POST /recommend), and the first it
+    /// says fits is pushed to the chat and the badge with its headline and why. Without an
+    /// answer from the brain, the nearest is pushed as before (name, distance).
     private func look() {
-        guard stage == .exploring, !paused, !looking, let location = finder.location else { return }
+        guard Self.ownPicks, stage == .exploring, !paused, !looking, let location = finder.location else { return }
         let now = Date()
         guard now.timeIntervalSince(lastShownAt) >= profile.pace.gap / timeScale,
               now.timeIntervalSince(lastLookedAt) >= max(10 / timeScale, 2) else { return }
@@ -249,21 +277,119 @@ final class Jensen: ObservableObject {
         let radius = profile.pace.radius
         Task { @MainActor in
             defer { looking = false }
-            let places = await finder.nearby(location, interests: interests, radius: radius)
+            async let fromMaps = finder.nearby(location, interests: interests, radius: radius)
+            async let fromBrain = brain.nearby(location, radius: radius)
+            let candidates = Self.merge(await fromMaps, await fromBrain, interests: interests, around: location)
             guard stage == .exploring, !paused else { return }
-            guard var place = places.first(where: { !shown.contains($0.key) }) else {
+            let fresh = candidates.filter { !shown.contains($0.key) && !judged.contains($0.key) }
+            guard !fresh.isEmpty else {
                 if !saidNothingNearby && shown.isEmpty {
                     saidNothingNearby = true
                     say("Nothing that fits within \(Int(radius)) m yet. Keep walking; I'm looking.")
                 }
                 return
             }
-            place.picture = await finder.picture(of: place)
-            shown.insert(place.key)
-            lastShownAt = Date()
-            let onBadge = badge.say("\(place.name), \(place.distance) m")
-            messages.append(Message(from: .jensen, text: "", place: place, onBadge: onBadge))
+            var chosen: Place?
+            for var place in fresh.prefix(3) {
+                judged.insert(place.key)
+                guard let verdict = try? await brain.recommend(place) else {
+                    chosen = place  // the brain didn't answer: the nearest, as before
+                    break
+                }
+                guard verdict.show else { continue }
+                place.headline = verdict.headline
+                place.why = verdict.why
+                place.matched = verdict.matched_interest
+                chosen = place
+                break
+            }
+            guard let chosen else { return }
+            await present(chosen)
         }
+    }
+
+    /// Pick up what the brain's always-on watcher chose (GET /badge/next): its picture, then
+    /// "headline|why" to the badge, a card in the chat and the pop-up over it.
+    private func poll() async {
+        guard stage == .exploring, !paused, !polling else { return }
+        polling = true
+        defer { polling = false }
+        guard let picked = await brain.next() else { return }
+        let spot = CLLocation(latitude: picked.place.lat, longitude: picked.place.lon)
+        var place = Self.place(picked.place, around: finder.location ?? spot)
+        if let here = finder.location { place.distance = Int(here.distance(from: spot)) }
+        place.headline = picked.headline
+        place.why = picked.why
+        guard !shown.contains(place.key) else { return }
+        shown.insert(place.key)
+        lastShownAt = Date()
+        place.picture = await finder.picture(of: place)
+        let onBadge = badge.pick(headline: picked.headline, why: picked.why)
+        say("📍 Spotted something for you:")
+        messages.append(Message(from: .jensen, text: "", place: place, onBadge: onBadge))
+        if pop == nil { pop = place } else { popQueue.append(place) }
+    }
+
+    /// The pop-up went back to the eyes: the next one, if any.
+    func popDone() {
+        pop = popQueue.isEmpty ? nil : popQueue.removeFirst()
+    }
+
+    /// Push a place to the badge and the chat, then fetch its picture.
+    private func present(_ chosen: Place) async {
+        guard stage == .exploring, !paused else { return }
+        var place = chosen
+        shown.insert(place.key)
+        lastShownAt = Date()
+        let onBadge: Bool
+        if let headline = place.headline, let why = place.why {
+            onBadge = badge.pick(headline: headline, why: why)
+        } else {
+            onBadge = badge.say("\(place.name), \(place.distance) m")
+        }
+        let message = Message(from: .jensen, text: "", place: place, onBadge: onBadge)
+        messages.append(message)
+        place.picture = await finder.picture(of: place)
+        if let at = messages.firstIndex(where: { $0.id == message.id }) { messages[at].place = place }
+    }
+
+    private static func place(_ found: BrainPlace, around location: CLLocation) -> Place {
+        let spot = CLLocation(latitude: found.lat, longitude: found.lon)
+        return Place(name: found.name, kind: kind(found.category), distance: found.distance_m ?? Int(location.distance(from: spot)),
+                     coordinate: spot.coordinate, summary: found.summary, url: found.url.flatMap(URL.init(string:)),
+                     imageURL: found.image.flatMap(URL.init(string:)), source: found.source)
+    }
+
+    /// Apple's maps places, with what the brain knows about the same place, then the brain's
+    /// places Apple's maps missed that fit an interest. Nearest first.
+    private static func merge(_ maps: [Place], _ brain: [BrainPlace]?, interests: [Interest], around location: CLLocation) -> [Place] {
+        let theirs = (brain ?? []).map { place($0, around: location) }
+        var places = maps.map { mine -> Place in
+            var mine = mine
+            if let twin = theirs.first(where: { $0.isTwin(of: mine) }) {
+                mine.summary = twin.summary
+                mine.url = twin.url
+                mine.imageURL = twin.imageURL
+                mine.source = twin.source
+            }
+            return mine
+        }
+        for place in theirs where !places.contains(where: { $0.isTwin(of: place) }) && interests.contains(where: { $0.fits(place) }) {
+            places.append(place)
+        }
+        return places.sorted { $0.distance < $1.distance }
+    }
+
+    /// "historic memorial" -> "Historic memorial"; a long Wikipedia description is cut short.
+    private static func kind(_ category: String?) -> String {
+        guard var words = category?.replacingOccurrences(of: "_", with: " "), !words.isEmpty else { return "Place" }
+        if words.count > 48 { words = String(words.prefix(46)).trimmingCharacters(in: .whitespaces) + "..." }
+        return words.prefix(1).uppercased() + words.dropFirst()
+    }
+
+    /// Tell the brain who is walking (POST /profile).
+    private func introduce() {
+        brain.introduce(Walker(interests: profile.interests.map(\.words), prefs: ["pace": profile.pace.rawValue], notes: nil))
     }
 
     // MARK: Small things

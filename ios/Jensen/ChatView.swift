@@ -40,6 +40,12 @@ struct ChatView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) { composer }
+            .overlay {
+                if let place = jensen.pop {
+                    PopUp(place: place) { jensen.popDone() }
+                        .id(place.id)
+                }
+            }
             .navigationTitle("Jensen")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -107,7 +113,7 @@ struct ChatView: View {
                 Button("Save") { brain.address = serverDraft.trimmingCharacters(in: .whitespacesAndNewlines) }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Where jensen/server.ts runs. Jensen sends it your position while you walk. Leave it empty to send nothing.")
+                Text("Where jensen/server.ts runs; the team's server is set at first. Jensen sends it your interests and position, and asks it which places fit. Leave it empty to send nothing.")
             }
         }
     }
@@ -191,7 +197,7 @@ private struct MessageRow: View {
             if message.from == .you { Spacer(minLength: 48) }
             VStack(alignment: .leading, spacing: 10) {
                 if let place = message.place {
-                    PlaceCard(place: place, onBadge: message.onBadge)
+                    SpotCard(place: place, onBadge: message.onBadge)
                 }
                 if !message.text.isEmpty { Text(message.text) }
             }
@@ -223,8 +229,30 @@ private struct PlaceCard: View {
             }
             .frame(width: 220, height: 220)
             .clipShape(.circle)
-            Text(place.name).font(.headline)
+            Text(place.headline ?? place.name).font(.headline)
+            if place.headline != nil, place.headline != place.name {
+                Text(place.name).font(.subheadline)
+            }
             Text("\(place.kind) · \(place.distance) m").font(.subheadline).foregroundStyle(.secondary)
+            if let why = place.why {
+                Text(why)
+            } else if let summary = place.summary, !summary.isEmpty {
+                Text(summary).font(.callout).lineLimit(4)
+            }
+            if let source = place.source {
+                HStack(spacing: 10) {
+                    if source.contains("wikipedia") {
+                        if let url = place.url, url.host()?.contains("wikipedia") == true {
+                            Link("From Wikipedia", destination: url)
+                        } else {
+                            Text("From Wikipedia")
+                        }
+                    }
+                    if source.contains("osm") { Text("© OpenStreetMap contributors") }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
             Label(onBadge ? "On the badge" : "Badge not connected",
                   systemImage: onBadge ? "checkmark.circle.fill" : "circle.dashed")
                 .font(.caption)

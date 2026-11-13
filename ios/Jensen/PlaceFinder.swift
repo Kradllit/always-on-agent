@@ -45,13 +45,38 @@ struct Place: Identifiable, Equatable {
     /// Metres from where the phone was when it was found.
     var distance: Int
     var coordinate: CLLocationCoordinate2D
-    /// A street-level photo where Apple has one, a map of the spot otherwise.
+    /// A photo: the brain's (Wikipedia's) where it has one, else Apple's street-level photo,
+    /// else a map of the spot.
     var picture: UIImage?
+    /// What is known about it, from the brain's GET /nearby (Wikipedia, OpenStreetMap).
+    var summary: String?
+    var url: URL?
+    var imageURL: URL?
+    /// "wikipedia", "osm" or "wikipedia+osm"; nil for a place only Apple's maps know.
+    var source: String?
+    /// The brain's verdict (POST /recommend): a short name for the badge, and why it fits.
+    var headline: String?
+    var why: String?
+    var matched: String?
 
     static func == (a: Place, b: Place) -> Bool { a.id == b.id }
 
     /// Tells the same place apart from another across searches.
-    var key: String { "\(name)|\((coordinate.latitude * 10_000).rounded())|\((coordinate.longitude * 10_000).rounded())" }
+    var key: String { "\(Self.plain(name))|\((coordinate.latitude * 2_000).rounded())|\((coordinate.longitude * 2_000).rounded())" }
+
+    /// A name with only its letters and digits, lower case, to match names from two sources.
+    static func plain(_ name: String) -> String {
+        String(name.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(Character.init))
+    }
+
+    /// Whether `other` is the same place under another source's name: same name (or one
+    /// contained in the other), within 75 m.
+    func isTwin(of other: Place) -> Bool {
+        let a = Self.plain(name), b = Self.plain(other.name)
+        guard !a.isEmpty, !b.isEmpty, a == b || a.contains(b) || b.contains(a) else { return false }
+        let here = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        return here.distance(from: CLLocation(latitude: other.coordinate.latitude, longitude: other.coordinate.longitude)) <= 75
+    }
 }
 
 /// Where the phone is, and what is around it. Apple's MapKit does the looking: no key, no
@@ -158,6 +183,19 @@ final class PlaceFinder: NSObject, ObservableObject, CLLocationManagerDelegate {
     /// where there is one, a map of the spot otherwise.
     func picture(of place: Place) async -> UIImage? {
         let size = CGSize(width: 466, height: 466)
+        if let url = place.imageURL {
+            let photo: UIImage? = await within(8) {
+                var request = URLRequest(url: url)
+                request.setValue("jensen-hackathon/0.1", forHTTPHeaderField: "user-agent")
+                guard let (data, _) = try? await URLSession.shared.data(for: request),
+                      let image = UIImage(data: data) else { return nil }
+                return await image.byPreparingThumbnail(ofSize: Self.filling(size, with: image.size)) ?? image
+            }
+            if let photo {
+                log.info("picture: photo from the brain")
+                return photo
+            }
+        }
         let item = MKMapItem(location: CLLocation(latitude: place.coordinate.latitude, longitude: place.coordinate.longitude), address: nil)
         let street: UIImage? = await within(6) {
             guard let scene = try? await MKLookAroundSceneRequest(mapItem: item).scene else { return nil }
@@ -180,6 +218,13 @@ final class PlaceFinder: NSObject, ObservableObject, CLLocationManagerDelegate {
         return map
     }
 
+    /// The size `image` takes to fill `box`, keeping its shape.
+    private static func filling(_ box: CGSize, with image: CGSize) -> CGSize {
+        guard image.width > 0, image.height > 0 else { return box }
+        let scale = max(box.width / image.width, box.height / image.height)
+        return CGSize(width: (image.width * scale).rounded(), height: (image.height * scale).rounded())
+    }
+
     private static func kind(of item: MKMapItem) -> String {
         guard let raw = item.pointOfInterestCategory?.rawValue else { return "Place" }
         // "MKPOICategoryNationalPark" -> "National park"
@@ -190,33 +235,67 @@ final class PlaceFinder: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 }
 
-/// One thing the person said they are into, and what it means to Apple's maps.
+/// One thing the person said they are into, and what it means to Apple's maps and to the
+/// brain's places.
 struct Interest: Equatable, Codable {
     /// As the person said it.
     var words: String
 
     /// Apple's kinds of place that fit. Empty when none does; then the words are searched for.
-    var categories: [MKPointOfInterestCategory] {
-        // A key fits when a word starts with it: "galler" fits "galleries", "bar" not "barber"... nor "embark".
-        let said = words.lowercased().split(whereSeparator: { !$0.isLetter })
-        for (keys, categories) in Self.known where keys.contains(where: { key in said.contains { $0.hasPrefix(key) } }) {
-            return categories
+    var categories: [MKPointOfInterestCategory] { row?.categories ?? [] }
+
+    /// Whether a place from the brain's GET /nearby fits, by its category and summary.
+    func fits(_ place: Place) -> Bool {
+        let text = "\(place.kind) \(place.summary ?? "")".lowercased()
+        if let row {
+            if row.landmarks, place.source?.contains("wikipedia") == true { return true }
+            return row.terms.contains { text.contains($0) }
         }
-        return []
+        return said.contains { $0.count > 2 && text.contains($0) }
     }
 
-    private static let known: [([String], [MKPointOfInterestCategory])] = [
-        (["coffee", "cafe", "espresso", "tea"], [.cafe, .bakery]),
-        (["food", "eat", "restaurant", "dinner", "lunch"], [.restaurant, .foodMarket, .bakery]),
-        (["art", "galler", "museum"], [.museum, .theater]),
-        (["book", "librar", "read"], [.library]),
-        (["park", "nature", "garden", "outdoor", "green"], [.park, .nationalPark, .beach]),
-        (["music", "concert", "gig"], [.musicVenue, .nightlife]),
-        (["histor", "monument"], [.museum, .landmark, .nationalMonument, .castle, .fortress]),
-        (["architect", "building", "landmark", "sight"], [.landmark, .nationalMonument]),
-        (["shop", "store", "boutique"], [.store]),
-        (["bar", "beer", "wine", "cocktail", "drink"], [.nightlife, .brewery, .winery, .distillery]),
-        (["movie", "film", "cinema"], [.movieTheater]),
-        (["sport", "gym", "fitness"], [.fitnessCenter, .stadium]),
+    private var said: [String] { words.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init) }
+
+    /// A key fits when a word starts with it: "galler" fits "galleries", "bar" not "barber"... nor "embark".
+    private var row: Row? {
+        Self.known.first { row in row.keys.contains { key in said.contains { $0.hasPrefix(key) } } }
+    }
+
+    private struct Row {
+        var keys: [String]
+        var categories: [MKPointOfInterestCategory]
+        /// Words in a brain place's category or summary that fit.
+        var terms: [String]
+        /// Wikipedia's places (landmarks, buildings, history) all fit.
+        var landmarks = false
+    }
+
+    private static let known: [Row] = [
+        Row(keys: ["coffee", "cafe", "espresso", "tea"], categories: [.cafe, .bakery], terms: ["cafe", "coffee"]),
+        Row(keys: ["food", "eat", "restaurant", "dinner", "lunch"], categories: [.restaurant, .foodMarket, .bakery],
+            terms: ["restaurant", "fast_food", "ice_cream", "cuisine", "bakery", "food hall", "market"]),
+        Row(keys: ["art", "galler", "museum", "mural"], categories: [.museum, .theater],
+            terms: ["museum", "gallery", "artwork", "mural", "sculpture", "art "]),
+        Row(keys: ["book", "librar", "read", "literat"], categories: [.library],
+            terms: ["library", "book", "literary", "poet", "writer", "beat generation"]),
+        Row(keys: ["park", "nature", "garden", "outdoor", "green"], categories: [.park, .nationalPark, .beach],
+            terms: ["park", "garden", "plaza", "square"]),
+        Row(keys: ["view"], categories: [.landmark, .park],
+            terms: ["viewpoint", "view", "hill", "tower", "observation"]),
+        Row(keys: ["music", "concert", "gig", "jazz"], categories: [.musicVenue, .nightlife],
+            terms: ["music", "jazz", "concert", "venue", "theatre", "theater"]),
+        Row(keys: ["histor", "monument"], categories: [.museum, .landmark, .nationalMonument, .castle, .fortress],
+            terms: ["historic", "history", "memorial", "monument", "museum", "century"], landmarks: true),
+        Row(keys: ["architect", "building", "landmark", "sight"], categories: [.landmark, .nationalMonument],
+            terms: ["building", "tower", "church", "cathedral", "architect", "historic", "bridge"], landmarks: true),
+        Row(keys: ["hidden", "gem", "secret"], categories: [.landmark, .park, .museum],
+            terms: ["artwork", "memorial", "alley", "stairway", "steps", "plaque", "historic"], landmarks: true),
+        Row(keys: ["science", "tech"], categories: [.museum, .planetarium, .aquarium],
+            terms: ["science", "planetarium", "aquarium", "museum"]),
+        Row(keys: ["shop", "store", "boutique"], categories: [.store], terms: ["shop", "store", "market", "boutique"]),
+        Row(keys: ["bar", "beer", "wine", "cocktail", "drink", "pub"], categories: [.nightlife, .brewery, .winery, .distillery],
+            terms: ["bar", "pub", "brewery", "wine", "cocktail", "saloon"]),
+        Row(keys: ["movie", "film", "cinema"], categories: [.movieTheater], terms: ["cinema", "theatre", "theater", "film"]),
+        Row(keys: ["sport", "gym", "fitness"], categories: [.fitnessCenter, .stadium], terms: ["stadium", "sport"]),
     ]
 }

@@ -109,6 +109,14 @@ final class BadgeLink: NSObject, ObservableObject {
         return true
     }
 
+    /// A place the brain picked, as "headline|why" for the badge to show and read.
+    @discardableResult
+    func pick(headline: String, why: String) -> Bool {
+        stopPaging()
+        let clean = { (text: String) in Self.latin(text).replacingOccurrences(of: "|", with: "/") }
+        return write(String((clean(headline) + "|" + clean(why)).prefix(400)))
+    }
+
     /// Blink and say hello: shows which badge this is.
     func wave() {
         write("blink")
@@ -131,6 +139,11 @@ final class BadgeLink: NSObject, ObservableObject {
 
     /// The badge's screen font has Latin-1 only, and its caption holds two short lines.
     static func forBadge(_ text: String) -> String {
+        String(latin(text).prefix(60))
+    }
+
+    /// Text in the badge font's letters (Latin-1), without line breaks.
+    static func latin(_ text: String) -> String {
         let plain = text
             .replacingOccurrences(of: "\u{2019}", with: "'")
             .replacingOccurrences(of: "\u{2018}", with: "'")
@@ -140,7 +153,7 @@ final class BadgeLink: NSObject, ObservableObject {
             .replacingOccurrences(of: "\u{2014}", with: "-")
         let latin = plain.applyingTransform(.toLatin, reverse: false) ?? plain
         let shown = String(latin.unicodeScalars.filter { $0.value >= 0x20 && $0.value <= 0xFF }.map(Character.init))
-        return String(shown.trimmingCharacters(in: .whitespaces).prefix(60))
+        return shown.trimmingCharacters(in: .whitespaces)
     }
 
     /// Text cut at word boundaries into screenfuls of about 40 characters, at most five.
