@@ -48,6 +48,12 @@ final class BadgeLink: NSObject, ObservableObject {
     /// Badges found by the current scan, nearest first.
     @Published private(set) var found: [FoundBadge] = []
     @Published private(set) var scanning = false
+    /// For the status line: what Bluetooth is doing, what it sees, what went wrong last.
+    @Published private(set) var seenCount = 0
+    @Published private(set) var lastError: String?
+    @Published private(set) var power = "unknown"
+    private var seenNames: [UUID: (name: String, rssi: Int)] = [:]
+    private var connectTimer: Timer?
     /// The remembered badge, by the identifier this iPhone gave it.
     @Published private(set) var paired: UUID? {
         didSet {
@@ -186,12 +192,14 @@ final class BadgeLink: NSObject, ObservableObject {
             seen[peripheral.identifier] = peripheral
             found.append(FoundBadge(id: peripheral.identifier, name: peripheral.name ?? "Basecamp Badge", rssi: -50))
         }
-        central.scanForPeripherals(withServices: [Self.service], options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        // No service filter: the advert may not carry the 128-bit service UUID (it doesn't fit
+        // with the name in 31 bytes). Badges are matched by name or by service below.
+        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
         log.info("scanning")
     }
 
     func stopScan() {
-        guard scanning else { return }
+        guard scanning, phase == .ready else { return }  // until connected: keep looking, for the status line
         scanning = false
         if central.state == .poweredOn { central.stopScan() }
     }
@@ -239,6 +247,15 @@ final class BadgeLink: NSObject, ObservableObject {
     private func connect(_ peripheral: CBPeripheral) {
         badge = peripheral
         peripheral.delegate = self
+        // Not connected within 12 s (the badge busy with the laptop's bridge): start again.
+        connectTimer?.invalidate()
+        connectTimer = Timer.scheduledTimer(withTimeInterval: 12, repeats: false) { [weak self] _ in
+            guard let self, self.phase != .ready, self.paired == peripheral.identifier else { return }
+            self.lastError = "connect timed out, retrying"
+            self.central.cancelPeripheralConnection(peripheral)
+            self.clear()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.reconnect() }
+        }
         phase = peripheral.state == .connected ? .connecting : .away
         if peripheral.state == .connected {
             peripheral.discoverServices([Self.service])
@@ -267,10 +284,18 @@ extension BadgeLink: CBCentralManagerDelegate {
 
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         log.info("bluetooth state \(central.state.rawValue)")
+        power = switch central.state {
+        case .poweredOn: "on"
+        case .poweredOff: "OFF"
+        case .unauthorized: "unauthorized"
+        case .unsupported: "unsupported"
+        case .resetting: "resetting"
+        default: "unknown"
+        }
         switch central.state {
         case .poweredOn:
             reconnect()
-            if scanning { startScan() }
+            startScan()
         case .unauthorized:
             phase = .notAllowed
         default:
@@ -282,17 +307,54 @@ extension BadgeLink: CBCentralManagerDelegate {
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let rssi = RSSI.intValue
-        guard rssi < 0 else { return }  // 127: not known
+        let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name ?? ""
+        let services = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [])
+            + (advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID] ?? [])
+        if seenNames[peripheral.identifier] == nil { seenCount += 1 }
+        seenNames[peripheral.identifier] = (name.isEmpty ? "?" : name, rssi)
+        let isBadge = name.localizedCaseInsensitiveContains("basecamp") || services.contains(Self.service)
+        guard isBadge, rssi < 0 else { return }  // 127: not known
         seen[peripheral.identifier] = peripheral
-        let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String) ?? peripheral.name ?? "Basecamp Badge"
+        // The remembered badge is advertising: connect now (the standing request may have lapsed).
+        if peripheral.identifier == paired, phase == .away {
+            connect(peripheral)
+        }
+        let shown = name.isEmpty ? "Basecamp Badge" : name
         if let at = found.firstIndex(where: { $0.id == peripheral.identifier }) {
             // Smooth the signal so the list doesn't jump around.
             found[at].rssi = (found[at].rssi * 3 + rssi) / 4
         } else {
-            found.append(FoundBadge(id: peripheral.identifier, name: name, rssi: rssi))
-            log.info("found \(name) \(peripheral.identifier) \(rssi)")
+            found.append(FoundBadge(id: peripheral.identifier, name: shown, rssi: rssi))
+            log.info("found \(shown) \(peripheral.identifier) \(rssi)")
         }
         found.sort { $0.rssi > $1.rssi }
+    }
+
+    /// One line for the screen: authorization, power, scanning, badges and devices seen, last error.
+    var statusLine: String {
+        let auth: String = switch CBManager.authorization {
+        case .allowedAlways: "allowed"
+        case .denied: "DENIED"
+        case .restricted: "restricted"
+        case .notDetermined: "not asked"
+        @unknown default: "?"
+        }
+        let badges = found.prefix(3).map { "\($0.name) \($0.rssi)" }.joined(separator: ", ")
+        var line = "BT \(auth) · \(power) · \(scanning ? "scanning" : "not scanning") · \(phaseWord)"
+        line += " · badges: \(badges.isEmpty ? "none" : badges) · \(seenCount) devices"
+        if let lastError { line += " · last error: \(lastError)" }
+        return line
+    }
+
+    private var phaseWord: String {
+        switch phase {
+        case .ready: "connected"
+        case .connecting: "connecting"
+        case .away: "waiting for remembered badge"
+        case .unpaired: "not paired"
+        case .bluetoothOff: "off"
+        case .notAllowed: "not allowed"
+        }
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
@@ -307,6 +369,7 @@ extension BadgeLink: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         log.info("failed to connect: \(error?.localizedDescription ?? "-")")
+        lastError = "connect failed: \(error?.localizedDescription ?? "unknown")"
         guard peripheral.identifier == paired else { return }
         clear()
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.reconnect() }
@@ -314,16 +377,21 @@ extension BadgeLink: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         log.info("disconnected: \(error?.localizedDescription ?? "-")")
+        if let error { lastError = "disconnected: \(error.localizedDescription)" }
         guard peripheral.identifier == paired else { return }
         stopPaging()
         clear()
         reconnect()
+        startScan()
     }
 }
 
 extension BadgeLink: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
-        guard let service = peripheral.services?.first(where: { $0.uuid == Self.service }) else { return }
+        guard let service = peripheral.services?.first(where: { $0.uuid == Self.service }) else {
+            lastError = "badge service not found: \(error?.localizedDescription ?? "\(peripheral.services?.count ?? 0) services")"
+            return
+        }
         peripheral.discoverCharacteristics([Self.statusValue, Self.commandValue], for: service)
     }
 
@@ -333,7 +401,10 @@ extension BadgeLink: CBPeripheralDelegate {
             if characteristic.uuid == Self.commandValue { commandCharacteristic = characteristic }
         }
         guard let statusCharacteristic, commandCharacteristic != nil else { return }
+        connectTimer?.invalidate()
+        lastError = nil
         let first = phase != .ready && UserDefaults.standard.string(forKey: "badge-greeted") != paired?.uuidString
+        defer { stopScan() }
         phase = .ready
         log.info("ready")
         peripheral.setNotifyValue(true, for: statusCharacteristic)
@@ -344,6 +415,10 @@ extension BadgeLink: CBPeripheralDelegate {
             write("blink")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in self?.say("Paired with Jensen") }
         }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        if let error { lastError = "write failed: \(error.localizedDescription)" }
     }
 
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
