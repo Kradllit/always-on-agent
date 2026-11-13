@@ -117,8 +117,16 @@ final class Jensen: ObservableObject {
         finder.onAuthorization = { [weak self] _ in self?.permissionChanged() }
         finder.onMove = { [weak self] location in self?.moved(to: location) }
         if let data = UserDefaults.standard.data(forKey: Self.saved),
-           let profile = try? JSONDecoder().decode(Profile.self, from: data), !profile.interests.isEmpty {
+           var profile = try? JSONDecoder().decode(Profile.self, from: data), !profile.interests.isEmpty {
+            // Interests come only from the onboarding chips: drop words an older build took from the chat ("hi").
+            let chips = Set(Onboarding.interests.map { $0.drop(while: { !$0.isLetter }).lowercased() })
+            profile.interests = profile.interests.filter { chips.contains($0.words.lowercased()) }
             self.profile = profile
+            if !profile.interests.isEmpty, let cleaned = try? JSONEncoder().encode(profile) {
+                UserDefaults.standard.set(cleaned, forKey: Self.saved)
+            }
+        }
+        if !profile.interests.isEmpty {
             if finder.allowed {
                 say("Welcome back. Still looking for \(Self.list(profile.interests)).")
                 explore(announce: false)
