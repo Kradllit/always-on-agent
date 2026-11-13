@@ -1,0 +1,19 @@
+[build]
+target = "xtensa-esp32s3-espidf"
+
+[target.xtensa-esp32s3-espidf]
+linker = "ldproxy"
+# `cargo run` flashes a badge of your own from scratch (bootloader, partition table, app)
+# and shows its log. The shared badge is flashed by ci/flash-on-push.ts instead.
+runner = "espflash flash --monitor --flash-size 16mb --partition-table partitions.csv"
+rustflags = ["--cfg", "espidf_time64"]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+MCU = "esp32s3"
+# ESP-IDF is fetched and built by the first `cargo build` (about 15 minutes, once).
+ESP_IDF_VERSION = "v5.5.5"
+# One copy for every checkout on this machine, in ~/.espressif.
+ESP_IDF_TOOLS_INSTALL_DIR = "global"
