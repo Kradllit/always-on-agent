@@ -2,7 +2,7 @@
 // personal reason shown on the badge, and answers follow-up questions (typed in the app or
 // spoken to the badge), with tools to book a table, get tickets or add the visit to a calendar.
 import Anthropic from "@anthropic-ai/sdk";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 // Fast enough for a spoken reply; override with JENSEN_MODEL.
@@ -48,11 +48,21 @@ export type Place = {
 export type Shown = { id: string; place: Place; headline: string; why: string; at: number };
 export type Action = { type: "booking" | "tickets" | "calendar"; summary: string; url?: string };
 
-export const profiles = new Map<string, Profile>();
+// Profiles survive a restart: kept in data/profiles.json next to this file (git ignores data/).
+const STORE = join(import.meta.dir, "data", "profiles.json");
+export const profiles = new Map<string, Profile>(
+  existsSync(STORE) ? (JSON.parse(readFileSync(STORE, "utf8")) as Profile[]).map((p) => [p.id, p]) : []);
+export function saveProfiles() {
+  try { mkdirSync(join(import.meta.dir, "data"), { recursive: true }); writeFileSync(STORE, JSON.stringify([...profiles.values()], null, 1)); }
+  catch (e) { console.error("could not save profiles", e); }
+}
 /** Places shown to each person, newest last; follow-up questions are about the newest. */
 export const shown = new Map<string, Shown[]>();
 export const actions: (Action & { profile: string; at: number })[] = [];
 export const calendar = new Map<string, string>(); // id → .ics text
+
+/** Where each person last was, set by the server on POST /location, so /ask can look around them. */
+export const lastLocation = new Map<string, { lat: number; lon: number }>();
 
 const id = () => Math.random().toString(36).slice(2, 10);
 
@@ -177,6 +187,11 @@ const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "places_near_me",
+    description: "Real places around the person right now (landmarks, history, restaurants, cafes, museums), nearest first, each with a short description. Use for 'what's near me', 'recommend a place', 'where should I eat', and before suggesting anything nearby.",
+    input_schema: { type: "object", properties: { radius_m: { type: "integer", minimum: 100, maximum: 2000, default: 500 } } },
+  },
+  {
     name: "clock",
     description: "The current local date and time where the person is. Use before booking anything for 'tonight' or 'tomorrow'.",
     input_schema: { type: "object", properties: {} },
@@ -194,8 +209,15 @@ function ics(title: string, start: string, minutes: number, location = "", notes
     `LOCATION:${location}`, `DESCRIPTION:${notes.replace(/\n/g, "\\n")}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n");
 }
 
-function runTool(profile: Profile, name: string, input: any): { text: string; action?: Action } {
+async function runTool(profile: Profile, name: string, input: any): Promise<{ text: string; action?: Action }> {
   switch (name) {
+    case "places_near_me": {
+      const at = lastLocation.get(profile.id);
+      if (!at) return { text: "Their location isn't known yet; ask them to start walking or share location." };
+      const { nearby } = await import("./nearby.ts");
+      const { places } = await nearby(at.lat, at.lon, input.radius_m || 500, 15);
+      return { text: places.map((p) => `${p.name} (${p.distance_m} m, ${p.category || "place"}): ${(p.summary || "").slice(0, 220)}`).join("\n") || "Nothing found nearby." };
+    }
     case "clock":
       return { text: new Date().toLocaleString("en-US", { timeZone: TZ, dateStyle: "full", timeStyle: "short" }) };
     case "book_table": {
@@ -241,7 +263,7 @@ export async function ask(profile: Profile, question: string) {
     const results: Anthropic.ToolResultBlockParam[] = [];
     for (const block of resp.content) {
       if (block.type !== "tool_use") continue;
-      const r = runTool(profile, block.name, block.input);
+      const r = await runTool(profile, block.name, block.input);
       if (r.action) done.push(r.action);
       results.push({ type: "tool_result", tool_use_id: block.id, content: r.text });
     }
@@ -253,5 +275,6 @@ export async function ask(profile: Profile, question: string) {
 export function newProfile(name: string, interests: string[], notes?: string): Profile {
   const p = { id: id(), name: name || "friend", interests, notes };
   profiles.set(p.id, p);
+  saveProfiles();
   return p;
 }
