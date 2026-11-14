@@ -84,13 +84,13 @@ watcher does the choosing.
 - The scan has no service filter. The advert has no room for the name next to the 128-bit
   UUID, so badges are matched by the service. iOS may show a badge under an old cached
   name; this board showed as "Concrete Badge". The app labels badges by their service.
-- The status line under the header shows each step: Bluetooth permission and power,
+- The status line at the foot of the Badge sheet (tap the line under the title) shows each step: Bluetooth permission and power,
   scanning, the badges seen with their signal, connect requested, connected, service found,
   ready, line acknowledged, picture sent, and the last error.
 - **If the badge never connects** ("timed out" over and over), the iPhone may still hold a
   pairing for the same board from other firmware. Go to Settings, Bluetooth, tap (i) next to
-  the badge (here "Concrete Badge") and choose Forget This Device. The status line suggests
-  this too.
+  the badge (here "Concrete Badge") and choose Forget This Device. The Badge sheet's status line
+  suggests this too.
 
 ## Run it
 
@@ -125,12 +125,12 @@ After adding or removing a file, run `xcodegen` in this folder and commit the re
 |---|---|
 | `Jensen/Jensen.swift` | Jensen: onboarding answers, polling the brain's picks, questions, learning signals |
 | `Jensen/OnboardingView.swift` | Wander's one-screen onboarding |
-| `Jensen/ChatView.swift` | The chat screen, header, status line, composer with hold-to-talk |
+| `Jensen/ChatView.swift` | The chat screen, header, composer with hold-to-talk |
 | `Jensen/PopUp.swift` | The pick popping up as on the badge, and its card in the chat with the feedback buttons |
 | `Jensen/YouView.swift` | What Jensen has learned about you |
 | `Jensen/BrainLink.swift` | The link to the brain (`jensen/server.ts`) |
 | `Jensen/BadgeLink.swift` | The Bluetooth link to the badge: pairing, reconnecting, lines and photos |
-| `Jensen/BadgeSheet.swift` | Pairing: badges nearby, the paired one, wave, forget |
+| `Jensen/BadgeSheet.swift` | Pairing: badges nearby, the paired one, wave, forget, and the Bluetooth status line |
 | `Jensen/Listener.swift` | Press-to-talk (speech recognition) and speaking replies |
 | `Jensen/PlaceFinder.swift` | Where the phone is, Apple Maps places, a place's picture |
 | `Jensen/DemoWalk.swift` | The demo walk and its map |

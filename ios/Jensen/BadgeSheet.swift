@@ -16,6 +16,17 @@ struct BadgeSheet: View {
                     scanSection
                 }
             }
+            .safeAreaInset(edge: .bottom) {
+                // Bluetooth's details, for when the badge won't connect.
+                Text(badge.statusLine)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.bar)
+                    .textSelection(.enabled)
+            }
             .navigationTitle("Badge")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

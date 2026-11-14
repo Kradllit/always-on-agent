@@ -64,16 +64,6 @@ struct ChatView: View {
             }
             }
             }
-            .safeAreaInset(edge: .top) {
-                Text(badge.statusLine)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
-                    .background(.bar)
-                    .onTapGesture { showingBadge = true }
-            }
             .safeAreaInset(edge: .bottom) { if !jensen.onboarding { composer } }
             .overlay {
                 if let place = jensen.pop {
