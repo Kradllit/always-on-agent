@@ -1,0 +1,4 @@
+# Build output and per-person Xcode state
+build/
+xcuserdata/
+*.xcuserstate
