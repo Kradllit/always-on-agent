@@ -121,7 +121,8 @@ final class BrainLink: ObservableObject {
     func next() async -> (place: BrainPlace, headline: String, why: String)? {
         guard let base, let profileID else { return nil }
         var parts = URLComponents(url: base.appending(path: "badge/next"), resolvingAgainstBaseURL: false)!
-        parts.queryItems = [URLQueryItem(name: "profile_id", value: profileID)]
+        // One cursor per reader on the brain: the phone gets every pick once, whatever the laptop's bridge reads.
+        parts.queryItems = [URLQueryItem(name: "profile_id", value: profileID), URLQueryItem(name: "consumer", value: "phone")]
         var request = URLRequest(url: parts.url!)
         request.timeoutInterval = 8
         struct Next: Decodable { var empty: Bool; var headline: String?; var why: String?; var place: BrainPlace? }
