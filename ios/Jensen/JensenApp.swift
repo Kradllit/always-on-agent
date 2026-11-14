@@ -1,4 +1,13 @@
 import SwiftUI
+import UserNotifications
+
+/// Shows Jensen's notifications as banners with the app open too.
+final class Banners: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = Banners()
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+        [.banner, .sound, .list]
+    }
+}
 
 @main
 struct JensenApp: App {
@@ -9,6 +18,7 @@ struct JensenApp: App {
     @StateObject private var listener: Listener
 
     init() {
+        UNUserNotificationCenter.current().delegate = Banners.shared
         let badge = BadgeLink()
         let finder = PlaceFinder()
         let brain = BrainLink()

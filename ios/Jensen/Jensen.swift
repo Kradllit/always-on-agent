@@ -1,5 +1,7 @@
 import CoreLocation
 import Foundation
+import UIKit
+import UserNotifications
 
 /// One line of the chat.
 struct Message: Identifiable {
@@ -316,6 +318,7 @@ final class Jensen: ObservableObject {
 
     private func explore(announce: Bool) {
         stage = .exploring
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
         introduce()
         if announce {
             say("I'm on. Put the phone away: what I find shows on your badge, and here with a picture.")
@@ -405,7 +408,9 @@ final class Jensen: ObservableObject {
         lastShownAt = Date()
         place.picture = await finder.picture(of: place)
         // One card, then its picture.
+        // The badge card and the phone's notification go out at the same moment.
         let onBadge = badge.pick(headline: picked.headline, why: picked.why, note: walkingTime(place.distance), picture: place.picture)
+        Self.notify(place)
         say("📍 Spotted something for you:")
         messages.append(Message(from: .jensen, text: "", place: place, onBadge: onBadge))
         if pop == nil { pop = place } else { popQueue.append(place) }
@@ -447,6 +452,24 @@ final class Jensen: ObservableObject {
         let kept = profile.signals
         startOver()
         profile.signals = kept
+    }
+
+    /// A notification for a pick, with its picture, shown at once (also with the app open).
+    private static func notify(_ place: Place) {
+        let content = UNMutableNotificationContent()
+        content.title = place.headline ?? place.name
+        content.subtitle = walkingTime(place.distance)
+        content.body = place.why ?? ""
+        content.sound = .default
+        content.interruptionLevel = .active
+        if let jpeg = place.picture?.jpegData(compressionQuality: 0.8) {
+            let file = FileManager.default.temporaryDirectory.appending(path: "\(place.id).jpg")
+            if (try? jpeg.write(to: file)) != nil,
+               let attachment = try? UNNotificationAttachment(identifier: "picture", url: file) {
+                content.attachments = [attachment]
+            }
+        }
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: place.id.uuidString, content: content, trigger: nil))
     }
 
     /// The pop-up went back to the eyes: the next one, if any.

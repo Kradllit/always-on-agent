@@ -88,6 +88,8 @@ final class BadgeLink: NSObject, ObservableObject {
     /// A picture waiting for its line to arrive.
     private var afterLine: UIImage?
     @Published private(set) var lastPicture: String?
+    /// The last step of finding and connecting to the badge, for the status line.
+    @Published private(set) var step = "starting"
     /// Lines waiting for the badge to be there, and the lines being shown one after another.
     private var paging: [String] = []
     private var pageTimer: Timer?
@@ -302,8 +304,9 @@ final class BadgeLink: NSObject, ObservableObject {
             if central.state == .poweredOn { phase = .unpaired }
             return
         }
-        let peripheral = badge?.identifier == paired ? badge
-            : central.retrievePeripherals(withIdentifiers: [paired]).first
+        // A peripheral from a fresh scan first; the stored identifier only when the scan hasn't seen it yet.
+        let peripheral = seen[paired] ?? (badge?.identifier == paired ? badge
+            : central.retrievePeripherals(withIdentifiers: [paired]).first)
         guard let peripheral else {
             // This iPhone no longer knows it (Bluetooth was reset): pair again.
             log.info("remembered badge unknown to this iPhone")
@@ -331,7 +334,8 @@ final class BadgeLink: NSObject, ObservableObject {
         if peripheral.state == .connected {
             peripheral.discoverServices([Self.service])
         } else {
-            central.connect(peripheral)
+            central.connect(peripheral, options: [CBConnectPeripheralOptionNotifyOnConnectionKey: false])
+            step = "connect requested (\(seen[peripheral.identifier] != nil ? "from scan" : "from stored id"))"
         }
     }
 
@@ -392,6 +396,7 @@ extension BadgeLink: CBCentralManagerDelegate {
         // The remembered badge is advertising: connect now (the standing request may have lapsed).
         // (Only when no attempt is pending: adverts arrive many times a second.)
         if peripheral.identifier == paired, phase == .away, connectTimer?.isValid != true {
+            step = "scan saw the paired badge"
             connect(peripheral)
         }
         // Our service in the advert means the hackathon firmware, whatever name iOS remembers.
@@ -419,6 +424,7 @@ extension BadgeLink: CBCentralManagerDelegate {
         let badges = found.prefix(3).map { "\($0.name)\($0.cachedName.map { " (iOS: \($0))" } ?? "") \($0.rssi)\($0.id == paired ? " paired" : "")" }.joined(separator: ", ")
         var line = "BT \(auth) · \(power) · \(scanning ? "scanning" : "not scanning") · \(phaseWord)"
         line += " · badges: \(badges.isEmpty ? "none" : badges) · \(seenCount) devices"
+        line += " · step: \(step)"
         if let lastPicture { line += " · last picture: \(lastPicture)" }
         if let lastError { line += " · last error: \(lastError)" }
         return line
@@ -436,6 +442,7 @@ extension BadgeLink: CBCentralManagerDelegate {
     }
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        step = "connected, finding service"
         log.info("connected \(peripheral.identifier)")
         guard peripheral.identifier == paired else {
             central.cancelPeripheralConnection(peripheral)
@@ -447,6 +454,7 @@ extension BadgeLink: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         log.info("failed to connect: \(error?.localizedDescription ?? "-")")
+        step = "connect failed"
         if let error = error as? CBError, error.code == .peerRemovedPairingInformation || error.code == .encryptionTimedOut {
             lastError = "this iPhone still has the old Concrete pairing: Settings, Bluetooth, Concrete Badge (i), Forget This Device"
         } else {
@@ -459,6 +467,7 @@ extension BadgeLink: CBCentralManagerDelegate {
 
     func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         log.info("disconnected: \(error?.localizedDescription ?? "-")")
+        step = "disconnected"
         if let error { lastError = "disconnected: \(error.localizedDescription)" }
         guard peripheral.identifier == paired else { return }
         stopPaging()
@@ -474,6 +483,7 @@ extension BadgeLink: CBPeripheralDelegate {
             lastError = "badge service not found (\(error?.localizedDescription ?? "\(peripheral.services?.count ?? 0) services")): Settings, Bluetooth, Concrete Badge (i), Forget This Device, then Pair again"
             return
         }
+        step = "service found, finding characteristics"
         peripheral.discoverCharacteristics([Self.statusValue, Self.commandValue, Self.pictureValue], for: service)
     }
 
@@ -489,6 +499,7 @@ extension BadgeLink: CBPeripheralDelegate {
         let first = phase != .ready && UserDefaults.standard.string(forKey: "badge-greeted") != paired?.uuidString
         defer { stopScan() }
         phase = .ready
+        step = "ready (picture channel \(pictureCharacteristic == nil ? "missing" : "found"))"
         log.info("ready")
         peripheral.setNotifyValue(true, for: statusCharacteristic)
         peripheral.readValue(for: statusCharacteristic)
@@ -503,12 +514,16 @@ extension BadgeLink: CBPeripheralDelegate {
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error { lastError = "write failed: \(error.localizedDescription)" }
         if characteristic.uuid == Self.pictureValue {
-            if error == nil { sendPieces() } else {
+            if error == nil {
+                if pieces.isEmpty { step = "picture sent"; lastPicture = (lastPicture ?? "") + ", all acknowledged" }
+                sendPieces()
+            } else {
                 pieces = []
                 lastPicture = "stopped: \(error!.localizedDescription)"
             }
             return
         }
+        if characteristic.uuid == Self.commandValue { step = error == nil ? "line acknowledged" : "line failed" }
         if characteristic.uuid == Self.commandValue, let picture = afterLine {
             afterLine = nil
             if error == nil { sendPicture(picture) }
